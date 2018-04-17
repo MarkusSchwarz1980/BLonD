@@ -32,9 +32,10 @@ from beam.profile import Profile, CutOptions
 class CavityFeedbackCommissioning(object):
 
     def __init__(self, debug=False, open_loop=False, open_FB=False,
-                 open_drive=False):
+                 open_drive=False, V_err=None):
 
         self.debug = bool(debug)
+        self.V_err = V_err
         # Multiply with zeros if open == True
         self.open_loop = int(np.invert(bool(open_loop)))
         self.open_FB = int(np.invert(bool(open_FB)))
@@ -130,7 +131,9 @@ class SPSCavityFeedback(object):
         if turns < 1:
             raise RuntimeError("ERROR in SPSCavityFeedback: 'turns' has to" +
                                " be a positive integer!")
-        self.track_init(debug=Commissioning.debug)
+        
+        if self.Commissioning.V_err == None:
+            self.track_init(debug=Commissioning.debug)
 
     def track(self):
 
