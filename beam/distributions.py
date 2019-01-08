@@ -490,7 +490,7 @@ def matched_from_distribution_function(beam, full_ring_and_RF,
         # Computing the action J by integrating the dE trajectories
         J_array_dE0 = np.zeros(n_points_grid)
         
-        full_ring_and_RF2 = copy.deepcopy(full_ring_and_RF)
+        full_ring_and_RF2 = copy.copy(full_ring_and_RF)
         for j in range(n_points_grid):
             # Find left and right time coordinates for a given hamiltonian 
             # value
@@ -615,7 +615,7 @@ def matched_from_distribution_function(beam, full_ring_and_RF,
     if TotalInducedVoltage is not None:
         return [time_potential_low_res, line_density_], induced_voltage_object
     else:
-        return [time_potential_low_res, line_density_]
+        return [time_potential_low_res, line_density_, density_grid]
 
 def X0_from_bunch_length(bunch_length, bunch_length_fit, X_grid, sorted_X_dE0,
                          n_points_grid, time_potential_low_res,

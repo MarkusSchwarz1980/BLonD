@@ -202,7 +202,7 @@ class RFStation(object):
 
     def __init__(self, Ring, harmonic, voltage, phi_rf_d, n_rf=1,
                  section_index=1, omega_rf=None, phi_noise=None,
-                 RFStationOptions=RFStationOptions()):
+                 RFStationOptions=RFStationOptions(), empty=False):
 
         # Different indices
         self.counter = [int(0)]
@@ -212,6 +212,7 @@ class RFStation(object):
             raise RuntimeError("ERROR in RFStation: section_index out of" +
                                " allowed range!")
         self.n_rf = int(n_rf)
+        self.empty = empty
 
         # Imported from Ring
         self.Particle = Ring.Particle
@@ -251,12 +252,12 @@ class RFStation(object):
                                                      Ring.cycle_time,
                                                      Ring.RingOptions.t_start)
 
-        # Checking if the RFStation is empty
-        if np.sum(self.voltage) == 0:
-            self.empty = True
-        else:
-            self.empty = False
-
+#        # Checking if the RFStation is empty
+#        if np.sum(self.voltage) == 0:
+#            self.empty = True
+#        else:
+#            self.empty = False
+        
         # Reshape design phase
         self.phi_rf_d = RFStationOptions.reshape_data(phi_rf_d,
                                                       self.n_turns,
@@ -295,9 +296,10 @@ class RFStation(object):
         self.t_rf = 2*np.pi / self.omega_rf
 
         # From helper functions
-        self.phi_s = calculate_phi_s(self, self.Particle)
-        self.Q_s = calculate_Q_s(self, self.Particle)
-        self.omega_s0 = self.Q_s*Ring.omega_rev
+        if self.empty is not True and np.sum(self.voltage) != 0:
+            self.phi_s = calculate_phi_s(self, self.Particle)
+            self.Q_s = calculate_Q_s(self, self.Particle)
+            self.omega_s0 = self.Q_s*Ring.omega_rev
 
     def eta_tracking(self, beam, counter, dE):
         r"""Function to calculate the slippage factor as a function of the

@@ -245,7 +245,8 @@ class RingAndRFTracker(object):
         self.voltage = RFStation.voltage
         self.phi_noise = RFStation.phi_noise
         self.phi_rf = RFStation.phi_rf
-        self.phi_s = RFStation.phi_s
+        if self.rf_params.empty is not True and np.sum(self.voltage) != 0:
+            self.phi_s = RFStation.phi_s
         self.omega_rf = RFStation.omega_rf
         self.eta_0 = RFStation.eta_0
         self.eta_1 = RFStation.eta_1
