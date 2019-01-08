@@ -142,15 +142,16 @@ class InputTable(_ImpedanceObject):
             self.Re_Z_array_loaded = input_2
             # Imaginary part of impedance in :math:`\Omega`
             self.Im_Z_array_loaded = input_3
-            # Impedance array in :math:`\Omega`
-            self.impedance_loaded = (self.Re_Z_array_loaded + 1j * 
-                                     self.Im_Z_array_loaded)
             
             if self.frequency_array_loaded[0] != 0:
                 self.frequency_array_loaded = np.hstack((0, 
                                                   self.frequency_array_loaded))
                 self.Re_Z_array_loaded = np.hstack((0, self.Re_Z_array_loaded))
                 self.Im_Z_array_loaded = np.hstack((0, self.Im_Z_array_loaded))
+
+            # Impedance array in :math:`\Omega`
+            self.impedance_loaded = (self.Re_Z_array_loaded + 1j * 
+                                     self.Im_Z_array_loaded)
     
     
     def wake_calc(self, new_time_array):
