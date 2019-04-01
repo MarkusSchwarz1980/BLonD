@@ -23,7 +23,7 @@ import numpy as np
 from scipy.constants import c, physical_constants
 from setup_cpp import libblond
 import ctypes
-
+import warnings
 
 class _ImpedanceObject(object):
     
@@ -519,13 +519,16 @@ class TravelingWaveCavity(_ImpedanceObject):
         impedance : complex array
             Output impedance in :math:`\Omega + j \Omega`
         """
+        warnings.filterwarnings("ignore")
         
         self.frequency_array = frequency_array
         self.impedance = np.zeros(len(self.frequency_array), complex)
         
         for i in range(0, self.n_twc):
+            frPlusIndex, = np.where(self.frequency_array == self.frequency_R[i])
+            frMinusIndex, = np.where(self.frequency_array == -self.frequency_R[i])
             
-            Zplus = self.R_S[i] * ((np.sin(self.a_factor[i] / 2 *
+            Zminus = self.R_S[i] * ((np.sin(self.a_factor[i] / 2 *
                     (self.frequency_array - self.frequency_R[i])) / 
                     (self.a_factor[i] / 2 * (self.frequency_array -
                     self.frequency_R[i])))**2 - 2j*(self.a_factor[i] *
@@ -533,8 +536,11 @@ class TravelingWaveCavity(_ImpedanceObject):
                     np.sin(self.a_factor[i] * (self.frequency_array - 
                     self.frequency_R[i]))) / (self.a_factor[i] *
                     (self.frequency_array - self.frequency_R[i]))**2)
+                    
+            if len(frPlusIndex) != 0: 
+                Zminus[frPlusIndex[0]] = self.R_S[i]
             
-            Zminus = self.R_S[i] * ((np.sin(self.a_factor[i] / 2 * 
+            Zplus = self.R_S[i] * ((np.sin(self.a_factor[i] / 2 * 
                      (self.frequency_array + self.frequency_R[i])) /
                      (self.a_factor[i] / 2 * (self.frequency_array + 
                      self.frequency_R[i])))**2 - 2j*(self.a_factor[i] *
@@ -543,8 +549,11 @@ class TravelingWaveCavity(_ImpedanceObject):
                      self.frequency_R[i]))) / (self.a_factor[i] *
                      (self.frequency_array + self.frequency_R[i]))**2)
             
+            if len(frMinusIndex) != 0: 
+                Zplus[frMinusIndex[0]] = self.R_S[i]
+            
             self.impedance += Zplus + Zminus   
-
+        warnings.filterwarnings("default")
  
 
 class ResistiveWall(_ImpedanceObject):
