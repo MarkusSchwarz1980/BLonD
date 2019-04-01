@@ -150,23 +150,25 @@ class SPSCavityFeedback(object):
 
         r''' Tracking of the SPSCavityFeedback without beam.
         '''
-
-#        cmap = plt.get_cmap('jet')
-#        colors = cmap(np.linspace(0,1, self.turns))
-#        plt.figure('voltage')
-#        plt.clf()
-#        plt.grid()
+        
+        if debug:
+            cmap = plt.get_cmap('jet')
+            colors = cmap(np.linspace(0,1, self.turns))
+            plt.figure('voltage')
+            plt.clf()
+            plt.grid()
 
         for i in range(self.turns):
-#            print('OTFB pre-tracking iteration ', i)
+            print('OTFB pre-tracking iteration ', i)
             self.logger.debug("Pre-tracking w/o beam, iteration %d", i)
             self.OTFB_4.track_no_beam()
-#            plt.plot(self.OTFB_4.profile.bin_centers*1e6,
-#                     np.abs(self.OTFB_4.V_fine_tot),
-#                     color=colors[i])
-#             plt.plot(self.OTFB_4.rf_centers*1e6,
-#                      np.abs(self.OTFB_4.V_coarse_tot), color=colors[i],
-#                      linestyle='', marker='.')
+            if debug:
+                plt.plot(self.OTFB_4.profile.bin_centers*1e6,
+                         np.abs(self.OTFB_4.V_fine_tot)/1e6,
+                         color=colors[i])
+                plt.plot(self.OTFB_4.rf_centers*1e6,
+                         np.abs(self.OTFB_4.V_coarse_tot)/1e6, color=colors[i],
+                         linestyle='', marker='.')
             self.OTFB_5.track_no_beam()
 
         # Interpolate from the coarse mesh to the fine mesh of the beam
