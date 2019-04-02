@@ -18,10 +18,11 @@ from __future__ import division, print_function
 from builtins import range, object
 import numpy as np
 from numpy.fft import rfft, irfft, rfftfreq
-from ctypes import c_uint, c_double, c_void_p
+#from ctypes import c_uint, c_double, c_void_p
 from scipy.constants import e
 from ..toolbox.next_regular import next_regular
 from ..utils import bmath as bm
+from scipy.sparse import lil_matrix
 
 
 class TotalInducedVoltage(object):
@@ -757,3 +758,383 @@ class InducedVoltageResonator(_InducedVoltage):
         Heaviside function, which returns 1 if x>1, 0 if x<0, and 1/2 if x=0
         """
         return 0.5*(np.sign(x) + 1.)
+
+
+class InducedVoltageResonator_opti(_InducedVoltage):
+    r"""
+    *Calculates the induced voltage of several resonators for arbitrary 
+    line density. It does so by linearily interpolating the line density and 
+    solving the convolution integral with the resonator impedance analytically.
+    The line density need NOT be sampled at equidistant points. The times where
+    the induced voltage is calculated need to be the same where the line 
+    density is sampled. If no timeArray is passed, the induced voltage is 
+    evaluated at the points of the line density. This is nececassry of 
+    compatability with other functions that calculate the induced voltage.
+    Currently, it requires the all quality factors :math:`Q>0.5`
+    Currently, only works for single turn.*
+    
+    Parameters
+    ----------
+    Beam : object
+        Beam object
+    Profile : object
+        Profile object
+    Resonators : object
+        Resonators object
+    timeArray : float array, optional
+        Array of time values where the induced voltage is calculated. 
+        If left out, the induced voltage is calculated at the times of the line
+        density.
+    
+    Attributes
+    ----------
+    beam : object
+        Copy of the Beam object in order to access the beam info.
+    profile : object
+        Copy of the Profile object in order to access the line density.
+    tArray : float array
+        array of time values where the induced voltage is calculated. 
+        If left out, the induced voltage is calculated at the times of the 
+        line density
+    atLineDensityTimes : boolean
+        flag indicating if the induced voltage has to be computed for timeArray
+        or for the line density
+    n_time : int
+        length of tArray
+    R, omega_r, Q : lists of float
+        Resonators parameters
+    n_resonators : int
+        Number of resonators
+    induced_voltage : float array
+        Computed induced voltage [V]
+    """
+    
+    def __init__ (self, Beam, Profile, resonator_list, timeArray=None):
+        
+        self.resonator_list = resonator_list
+        # Test if one or more quality factors is smaller than 0.5.
+        for resonator in resonator_list:
+            if sum(resonator.Q<0.5)>0:
+                #ResonatorError
+                raise RuntimeError('All quality factors Q must be larger than 0.5')
+#        
+#        # Test if one or more quality factors is smaller than 0.5.
+#        if sum(Resonators.Q<0.5)>0:
+#            raise RuntimeError('All quality factors Q must be larger than 0.5')
+        
+        # Copy of the Beam object in order to access the beam info.
+        self.beam = Beam
+        # Copy of the Profile object in order to access the line density.
+        self.profile = Profile
+        
+        # Optional array of time values where the induced voltage is calculated.
+        # If left out, the induced voltage is calculated at the times of the
+        # line density.
+        if timeArray is None:
+            self.tArray =  self.profile.bin_centers
+#            self.atLineDensityTimes = True
+        else:
+            self.tArray = timeArray
+#            self.atLineDensityTimes = False
+        
+        # Length of timeArray
+        self.n_time = len(self.tArray)
+        
+#        # Copy of the shunt impedances of the Resonators in* :math:`\Omega`
+#        self.R = Resonators.R_S
+#        # Copy of the resonant frequencies of the Resonators in in 1/s
+#        self.omega_r = Resonators.omega_R #resonant frequencies [1/s]
+#        # Copy of the quality factors of the Resonators
+#        self.Q = Resonators.Q
+#        # Number of resonators
+#        self.n_resonators = len(self.R)
+        
+#        # Bandwidth
+#        self.alpha = self.omega_r / (2*self.Q)
+#        self.omega_eff = np.sqrt(self.omega_r**2 - self.alpha**2)
+#
+#        # For internal use
+#        self._Qtilde = self.Q * np.sqrt(1. - 1./(4.*self.Q**2.))
+#        self._reOmegaP = self.omega_r * self._Qtilde / self.Q
+#        self._imOmegaP = self.omega_r / (2.*self.Q)
+        
+        # Slopes of the line segments. For internal use.
+        self._kappa1 = np.zeros(int(self.profile.n_slices))
+        self._delta_kappa1 = np.zeros(int(self.profile.n_slices-1))
+        
+        self.precompute_semi_analytic_factor()
+        
+        # Call the __init__ method of the parent class [calls process()]
+        _InducedVoltage.__init__(self, Beam, Profile, wake_length=None,
+             frequency_resolution=None,
+             multi_turn_wake=False, RFParams=None, mtw_mode=None)
+        
+        self.induced_voltage = np.zeros(len(self.tArray))
+    
+    def kernel(self, t, omega_eff, alpha):
+        return 2*(np.cos(omega_eff * t) + alpha\
+        * np.sin(omega_eff * t)/omega_eff)\
+        * np.exp(-alpha*t)
+    
+    
+    def precompute_semi_analytic_factor(self):
+        
+        self.semi_anlaytic_factor = np.zeros(self.n_time)
+        for resonator in self.resonator_list:
+            for r in range(resonator.n_resonators):
+                omega_r = resonator.omega_R[r]
+                Q = resonator.Q[r]
+                R = resonator.R_S[r]
+                alpha = omega_r / (2*Q)
+                omega_eff = np.sqrt(omega_r**2 - alpha**2)
+                tmp = R*self.kernel(np.arange(0,self.n_time) 
+                    * self.profile.bin_size, omega_eff, alpha) / (2*omega_r*Q)
+                self.semi_anlaytic_factor += tmp
+#        for r in range(len(self.Q)):
+#            omega_eff = self.omega_eff[r]
+#            omega_r = self.omega_r[r]
+#            alpha = self.alpha[r]
+#            Q = self.Q[r]
+#            R = self.R[r]
+#            tmp = R*self.kernel(np.arange(0,self.n_time) 
+#                * self.profile.bin_size, omega_eff, alpha) / (2*omega_r*Q)
+#            self.semi_anlaytic_factor += tmp
+        
+#        self.semi_anlaytic_factor \
+#            = self.kernel(np.arange(0,self.n_time)* self.profile.bin_size)
+#        self.semi_anlaytic_factor *= self.R/(2*self.omega_r*self.Q)
+        self.semi_anlaytic_factor *= \
+            -self.beam.Particle.charge*e*self.beam.intensity
+        self.semi_anlaytic_factor /=\
+            (self.beam.n_macroparticles*self.profile.bin_size**2)
+        self.semi_anlaytic_factor2 = self.semi_anlaytic_factor[0]/2
+        self.semi_anlaytic_factor[0] = 0
+        
+#        self.F = np.tril(self.semi_anlaytic_factor[1:],-1)
+        self.F = np.zeros(shape=(self.n_time-1,self.n_time-1))
+        
+#        for n in range(self.n_time-1):
+#            self.F += np.diag()
+#            self.F.diagonal(-n) = self.semi_anlaytic_factor[n+1]
+        
+#        self.F += np.diag(self.semi_anlaytic_factor[1])
+#        for row in range(self.n_time-1):
+#            for col in range(row):
+#                self.F[row, col] = self.semi_anlaytic_factor[col+row]
+        for row in range(self.n_time-1):
+            self.F[row,:row+1] = np.flip(
+                    self.semi_anlaytic_factor[1:row+2],axis=0)
+            
+    def process(self):
+        r"""
+        Reprocess the impedance contributions. To be run when slicing changes
+        """
+
+        _InducedVoltage.process(self)
+        
+        # Since profile object changed, need to assign the proper dimensions to 
+        # _kappa1 and _deltaT
+        self._kappa1 = np.zeros(int(self.profile.n_slices))
+        self._deltaT = np.zeros((self.n_time,self.profile.n_slices))
+    
+    
+    def induced_voltage_1turn(self):
+        r"""
+        Method to calculate the induced voltage through linearily 
+        interpolating the line density and applying the analytic equation
+        to the result.
+        """
+        
+        # Compute the slopes of the line sections of the linearily interpolated
+        # (normalized) line density.
+        self._kappa1[1:] = np.diff(self.profile.n_macroparticles)
+
+        self._delta_kappa1[:] = -np.diff(self._kappa1)
+        
+#        self.induced_voltage = np.dot(self.F, self._delta_kappa1)
+        
+#        for k in range(1,self.n_time):
+#            tmp = 0
+#            for j in range(0,k):
+#                tmp -= self._delta_kappa1[j]\
+#                    * self.semi_anlaytic_factor[k-j]
+#            self.induced_voltage[k] = tmp
+#        self.induced_voltage[1:] = self.F @ self._delta_kappa1
+        self.induced_voltage[1:] = np.dot(self.F, self._delta_kappa1)
+        
+        self.induced_voltage += 2*self.semi_anlaytic_factor2*self._kappa1
+
+class InducedVoltageResonator_opti2(_InducedVoltage):
+    r"""
+    *Calculates the induced voltage of several resonators for arbitrary 
+    line density. It does so by linearily interpolating the line density and 
+    solving the convolution integral with the resonator impedance analytically.
+    The line density need NOT be sampled at equidistant points. The times where
+    the induced voltage is calculated need to be the same where the line 
+    density is sampled. If no timeArray is passed, the induced voltage is 
+    evaluated at the points of the line density. This is nececassry of 
+    compatability with other functions that calculate the induced voltage.
+    Currently, it requires the all quality factors :math:`Q>0.5`
+    Currently, only works for single turn.*
+    
+    Parameters
+    ----------
+    Beam : object
+        Beam object
+    Profile : object
+        Profile object
+    resonator_list : object
+        Resonators object
+    timeArray : float array, optional
+        Array of time values where the induced voltage is calculated. 
+        If left out, the induced voltage is calculated at the times of the line
+        density.
+    
+    Attributes
+    ----------
+    beam : object
+        Copy of the Beam object in order to access the beam info.
+    profile : object
+        Copy of the Profile object in order to access the line density.
+    tArray : float array
+        array of time values where the induced voltage is calculated. 
+        If left out, the induced voltage is calculated at the times of the 
+        line density
+    atLineDensityTimes : boolean
+        flag indicating if the induced voltage has to be computed for timeArray
+        or for the line density
+    n_time : int
+        length of tArray
+    R, omega_r, Q : lists of float
+        Resonators parameters
+    n_resonators : int
+        Number of resonators
+    induced_voltage : float array
+        Computed induced voltage [V]
+    """
+    
+    def __init__ (self, Beam, Profile, resonator_list, timeArray=None):
+        
+        self.resonator_list = resonator_list
+        # Test if one or more quality factors is smaller than 0.5.
+        for resonator in resonator_list:
+            if sum(resonator.Q<0.5)>0:
+                #ResonatorError
+                raise RuntimeError('All quality factors Q must be larger than 0.5')
+        
+        # Copy of the Beam object in order to access the beam info.
+        self.beam = Beam
+        # Copy of the Profile object in order to access the line density.
+        self.profile = Profile
+        
+        # Optional array of time values where the induced voltage is calculated.
+        # If left out, the induced voltage is calculated at the times of the
+        # line density.
+        if timeArray is None:
+            self.time_array =  self.profile.bin_centers
+        else:
+            self.time_array = timeArray
+        
+        # Slopes of the line segments. For internal use.
+        self._kappa = np.zeros(self.profile.n_slices)
+        self._Delta_kappa = np.zeros(self.profile.n_slices)
+        
+        self.precompute_W_matrix()
+        
+        # Call the __init__ method of the parent class [calls process()]
+        _InducedVoltage.__init__(self, Beam, Profile, wake_length=None,
+             frequency_resolution=None,
+             multi_turn_wake=False, RFParams=None, mtw_mode=None)
+        
+        self.induced_voltage = np.zeros(len(self.time_array))
+    
+    
+    def kernel(self, t, omega_eff, alpha):
+        return bm.exp(-alpha*t) * (bm.cos(omega_eff*t) + alpha\
+                                  * bm.sin(omega_eff*t) / omega_eff)
+    
+    
+    # Implementation of Heaviside function
+    def Heaviside(self,x):
+        r"""
+        Heaviside function, which returns 1 if x>1, 0 if x<0, and 1/2 if x=0
+        """
+        
+        return 0.5*(np.sign(x) + 1.)
+
+    def chi(self, x, a, b):
+        return 0.5*(np.sign(x-a) - np.sign(x-b))
+    
+    def precompute_W_matrix(self):
+        tmp_W_matrix = lil_matrix((len(self.time_array),
+                                        self.profile.n_slices))
+        tmp_chi_matrix = lil_matrix((len(self.time_array),
+                                        self.profile.n_slices))
+        
+        for it, t in enumerate(self.time_array):
+            W_row = np.zeros(self.profile.n_slices)    
+            chi_row = np.zeros(self.profile.n_slices)
+            if it%100 == 0:
+                print(it/len(self.time_array))
+            # select only bins where t-bin_center >=0, so that the
+            # exp-function in the kernel does not overflow
+            indexes = t-self.profile.bin_centers >= 0
+            tmp_t = t-self.profile.bin_centers[indexes]
+            if len(tmp_t) > 0:
+                for resonator in self.resonator_list:
+                    for r in range(resonator.n_resonators):
+                        omega_r = resonator.omega_R[r]
+                        alpha = omega_r / (2*resonator.Q[r])  # bandwidth
+                        omega_eff = bm.sqrt(omega_r**2 - alpha**2)
+                        R = resonator.R_S[r]
+                        
+                        W_row[indexes] += 2*R*alpha/omega_r**2\
+                            * self.Heaviside(tmp_t)\
+                            * self.kernel(tmp_t, omega_eff, alpha)
+                        
+                        chi_row[1:] += 2*R*alpha/omega_r**2\
+                            * self.chi(t, self.profile.bin_centers[:-1],
+                                       self.profile.bin_centers[1:])
+            else:
+                pass  # t is before first bin -> zero wake field
+
+            # convert BLOND profile [# macroparticles] to charge density [A]
+            tmp_W_matrix[it] = W_row * self.beam.Particle.charge*e\
+                * self.beam.ratio / self.profile.bin_size
+            tmp_chi_matrix[it] = chi_row * self.beam.Particle.charge*e\
+                * self.beam.ratio / self.profile.bin_size
+        
+        # minus sign because of BLOND convention
+        # divide by bin size so that later only the difference in line profiles need to be computed
+        self.W_matrix = -tmp_W_matrix.tocsr() / self.profile.bin_size
+        self.chi_matrix = -tmp_chi_matrix.tocsr() / self.profile.bin_size
+        
+#    def process(self):
+#        r"""
+#        Reprocess the impedance contributions. To be run when slicing changes
+#        """
+#
+#        _InducedVoltage.process(self)
+#        
+#        # Since profile object changed, need to assign the proper dimensions to 
+#        # _kappa1 and _deltaT
+#        self._kappa1 = np.zeros(int(self.profile.n_slices))
+#        self._deltaT = np.zeros((self.n_time,self.profile.n_slices))
+    
+    
+    def induced_voltage_1turn(self):
+        r"""
+        Method to calculate the induced voltage through linearily 
+        interpolating the line density and applying the analytic equation
+        to the result.
+        """
+        
+        # Compute the slopes of the line sections of the linearily interpolated
+        # (normalized) line density.
+        self._kappa[1:] = np.diff(self.profile.n_macroparticles)
+        
+        self._Delta_kappa[:-1] = np.diff(self._kappa)
+        self._Delta_kappa[-1] = -self._kappa[-1]
+        
+        self.induced_voltage = self.chi_matrix.dot(self._kappa)
+        self.induced_voltage -= self.W_matrix.dot(self._Delta_kappa)

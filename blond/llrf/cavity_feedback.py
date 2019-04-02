@@ -156,7 +156,6 @@ class SPSCavityFeedback(object):
             plt.grid()
 
         for i in range(self.turns):
-            #            print('OTFB pre-tracking iteration ', i)
             self.logger.debug("Pre-tracking w/o beam, iteration %d", i)
             self.OTFB_4.track_no_beam()
             if debug:

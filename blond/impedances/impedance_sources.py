@@ -20,6 +20,7 @@ classes, as for example InputTable, Resonators and TravelingWaveCavity.**
 from __future__ import division, print_function
 from builtins import range, object
 import numpy as np
+import warnings
 from scipy.constants import c, physical_constants
 import ctypes
 # from ..setup_cpp import libblond
@@ -143,9 +144,6 @@ class InputTable(_ImpedanceObject):
             self.Re_Z_array_loaded = input_2
             # Imaginary part of impedance in :math:`\Omega`
             self.Im_Z_array_loaded = input_3
-            # Impedance array in :math:`\Omega`
-            self.impedance_loaded = (self.Re_Z_array_loaded + 1j * 
-                                     self.Im_Z_array_loaded)
             
             if self.frequency_array_loaded[0] != 0:
                 self.frequency_array_loaded = np.hstack((0, 
@@ -153,6 +151,9 @@ class InputTable(_ImpedanceObject):
                 self.Re_Z_array_loaded = np.hstack((0, self.Re_Z_array_loaded))
                 self.Im_Z_array_loaded = np.hstack((0, self.Im_Z_array_loaded))
     
+            # Impedance array in :math:`\Omega`
+            self.impedance_loaded = (self.Re_Z_array_loaded + 1j * 
+                                     self.Im_Z_array_loaded)
     
     def wake_calc(self, new_time_array):
         r"""
@@ -456,7 +457,6 @@ class TravelingWaveCavity(_ImpedanceObject):
     >>> twc.imped_calc(frequency)
     """
     
-    
     def __init__(self, R_S, frequency_R, a_factor):
         
         _ImpedanceObject.__init__(self)
@@ -473,7 +473,6 @@ class TravelingWaveCavity(_ImpedanceObject):
         # Number of resonant modes
         self.n_twc = len(self.R_S)
         
-    
     def wake_calc(self, time_array):
         r"""
         Wake calculation method as a function of time.
@@ -503,7 +502,6 @@ class TravelingWaveCavity(_ImpedanceObject):
                                   np.cos(2 * np.pi * self.frequency_R[i] *
                                   self.time_array[indexes]))
     
-    
     def imped_calc(self, frequency_array):
         r"""
         Impedance calculation method as a function of frequency.
@@ -524,9 +522,10 @@ class TravelingWaveCavity(_ImpedanceObject):
         self.frequency_array = frequency_array
         self.impedance = np.zeros(len(self.frequency_array), complex)
         
+        warnings.filterwarnings("ignore")  # ignore 1/0 when f = +/- f_R
         for i in range(0, self.n_twc):
             
-            Zplus = self.R_S[i] * ((np.sin(self.a_factor[i] / 2 *
+            Zminus = self.R_S[i] * ((np.sin(self.a_factor[i] / 2 *
                     (self.frequency_array - self.frequency_R[i])) / 
                     (self.a_factor[i] / 2 * (self.frequency_array -
                     self.frequency_R[i])))**2 - 2j*(self.a_factor[i] *
@@ -535,7 +534,7 @@ class TravelingWaveCavity(_ImpedanceObject):
                     self.frequency_R[i]))) / (self.a_factor[i] *
                     (self.frequency_array - self.frequency_R[i]))**2)
             
-            Zminus = self.R_S[i] * ((np.sin(self.a_factor[i] / 2 * 
+            Zplus = self.R_S[i] * ((np.sin(self.a_factor[i] / 2 * 
                      (self.frequency_array + self.frequency_R[i])) /
                      (self.a_factor[i] / 2 * (self.frequency_array + 
                      self.frequency_R[i])))**2 - 2j*(self.a_factor[i] *
@@ -545,8 +544,10 @@ class TravelingWaveCavity(_ImpedanceObject):
                      (self.frequency_array + self.frequency_R[i]))**2)
             
             self.impedance += Zplus + Zminus   
+            # finite impedance when f = +/- f_R
+            self.impedance[np.isnan(self.impedance)] = self.R_S[i]
+        warnings.filterwarnings("default")
 
- 
 
 class ResistiveWall(_ImpedanceObject):
     r"""
