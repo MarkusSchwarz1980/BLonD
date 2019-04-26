@@ -74,13 +74,13 @@ class TotalInducedVoltage(object):
         # Time array of the wake in s
         self.time_array = self.profile.bin_centers
 
-    def reprocess(self):
+    def reprocess(self, just_return=False):
         """
         Reprocess the impedance contributions. To be run when profile changes
         """
 
         for induced_voltage_object in self.induced_voltage_list:
-            induced_voltage_object.process()
+            induced_voltage_object.process(just_return)
 
     def induced_voltage_sum(self):
         """
@@ -417,7 +417,7 @@ class InducedVoltageTime(_InducedVoltage):
                                  wake_length=wake_length, multi_turn_wake=multi_turn_wake,
                                  RFParams=RFParams, mtw_mode=mtw_mode)
 
-    def process(self):
+    def process(self, just_return=False):
         """
         Reprocess the impedance contributions. To be run when profile changes
         """
@@ -437,17 +437,23 @@ class InducedVoltageTime(_InducedVoltage):
                               self.n_induced_voltage)
 
         # Processing the wakes
-        self.sum_wakes(self.time)
+        self.sum_wakes(self.time, just_return)
 
-    def sum_wakes(self, time_array):
+    def sum_wakes(self, time_array, just_return=False):
         """
         Summing all the wake contributions in one total wake.
         """
 
         self.total_wake = np.zeros(time_array.shape)
-        for wake_object in self.wake_source_list:
-            wake_object.wake_calc(time_array)
-            self.total_wake += wake_object.wake
+        
+        if just_return:
+            for wake_object in self.wake_source_list:
+                self.total_wake += wake_object.wake_calc(time_array,
+                                                         just_return)
+        else:
+            for wake_object in self.wake_source_list:
+                wake_object.wake_calc(time_array, just_return)
+                self.total_wake += wake_object.wake
 
         # Pseudo-impedance used to calculate linear convolution in the
         # frequency domain (padding zeros)
@@ -509,7 +515,7 @@ class InducedVoltageFreq(_InducedVoltage):
                                  multi_turn_wake=multi_turn_wake, RFParams=RFParams,
                                  mtw_mode=mtw_mode)
 
-    def process(self):
+    def process(self, just_return=False):
         """
         Reprocess the impedance contributions. To be run when profile change
         """
@@ -532,18 +538,23 @@ class InducedVoltageFreq(_InducedVoltage):
                 np.max(self.front_wake_length) / self.profile.bin_size))
 
         # Processing the impedances
-        self.sum_impedances(self.freq)
+        self.sum_impedances(self.freq, just_return)
 
-    def sum_impedances(self, freq):
+    def sum_impedances(self, freq, just_return=False):
         """
         Summing all the wake contributions in one total impedance.
         """
 
         self.total_impedance = np.zeros(freq.shape, complex)
-
-        for i in range(len(self.impedance_source_list)):
-            self.impedance_source_list[i].imped_calc(freq)
-            self.total_impedance += self.impedance_source_list[i].impedance
+        
+        if just_return:
+            for impedance_object in self.impedance_source_list:
+                self.total_impedance \
+                    += impedance_object.imped_calc(freq, just_return)
+        else:
+            for impedance_object in self.impedance_source_list:
+                impedance_object.imped_calc(freq)
+                self.total_impedance += impedance_object.impedance
 
         # Factor relating Fourier transform and DFT
         self.total_impedance /= self.profile.bin_size

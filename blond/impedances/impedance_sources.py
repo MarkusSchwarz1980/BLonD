@@ -155,7 +155,7 @@ class InputTable(_ImpedanceObject):
             self.impedance_loaded = (self.Re_Z_array_loaded + 1j * 
                                      self.Im_Z_array_loaded)
     
-    def wake_calc(self, new_time_array):
+    def wake_calc(self, new_time_array, just_return=False):
         r"""
         The wake from the table is interpolated using the new time array.
         
@@ -172,12 +172,16 @@ class InputTable(_ImpedanceObject):
             Output interpolated wake in :math:`\Omega / s`
         """
         
-        self.new_time_array = new_time_array
-        self.wake = np.interp(self.new_time_array, self.time_array, 
-                              self.wake_array, right=0)
-                           
+        wake = np.interp(self.new_time_array, self.time_array, 
+                         self.wake_array, right=0)
+        
+        if just_return:
+            return wake
+        else:
+            self.new_time_array = new_time_array
+            self.wake = wake
     
-    def imped_calc(self, new_frequency_array):
+    def imped_calc(self, new_frequency_array, just_return=False):
         r"""
         The impedance from the table is interpolated using the new frequency
         array.
@@ -203,11 +207,14 @@ class InputTable(_ImpedanceObject):
                          self.Re_Z_array_loaded, right = 0)
         Im_Z = np.interp(new_frequency_array, self.frequency_array_loaded, 
                          self.Im_Z_array_loaded, right = 0)
-        self.frequency_array = new_frequency_array
-        self.Re_Z_array = Re_Z
-        self.Im_Z_array = Im_Z
-        self.impedance = Re_Z + 1j * Im_Z
         
+        if just_return:
+            return Re_Z + 1j * Im_Z
+        else:
+            self.frequency_array = new_frequency_array
+            self.Re_Z_array = Re_Z
+            self.Im_Z_array = Im_Z
+            self.impedance = Re_Z + 1j * Im_Z
     
     
 class Resonators(_ImpedanceObject):
@@ -270,7 +277,7 @@ class Resonators(_ImpedanceObject):
     >>> resonators.imped_calc(frequency)
     """
     
-    def __init__(self, R_S, frequency_R, Q, method='c++'):
+    def __init__(self, R_S, frequency_R, Q, method='python'):
         
         _ImpedanceObject.__init__(self)
 
@@ -315,7 +322,7 @@ class Resonators(_ImpedanceObject):
         self.__omega_R = omega_R
 
 
-    def wake_calc(self, time_array):
+    def wake_calc(self, time_array, just_return=False):
         r"""
         Wake calculation method as a function of time.
         
@@ -332,22 +339,26 @@ class Resonators(_ImpedanceObject):
             Output wake in :math:`\Omega / s`    
         """
         
-        self.time_array = time_array
-        self.wake = np.zeros(self.time_array.shape)
+        wake = np.zeros(self.time_array.shape)
         
         for i in range(0, self.n_resonators):
        
             alpha = self.omega_R[i] / (2 * self.Q[i])
             omega_bar = np.sqrt(self.omega_R[i] ** 2 - alpha ** 2)
             
-            self.wake += ((np.sign(self.time_array) + 1) * self.R_S[i] *
+            wake += ((np.sign(self.time_array) + 1) * self.R_S[i] *
                          alpha * np.exp(-alpha * self.time_array) *
                          (np.cos(omega_bar * self.time_array) - alpha /
                           omega_bar * np.sin(omega_bar * self.time_array)))
-    
+        
+        if just_return:
+            return wake
+        else:
+            self.time_array = time_array
+            self.wake = wake
     
 
-    def _imped_calc_python(self, frequency_array):
+    def _imped_calc_python(self, frequency_array, just_return=False):
         r"""
         Impedance calculation method as a function of frequency using Python.
         
@@ -364,16 +375,21 @@ class Resonators(_ImpedanceObject):
             Output impedance in :math:`\Omega + j \Omega`
         """
         
-        self.frequency_array = frequency_array
-        self.impedance = np.zeros(len(self.frequency_array), complex)
+        impedance = np.zeros(len(frequency_array), complex)
         
         for i in range(0, self.n_resonators):
             
-            self.impedance[1:] += self.R_S[i] / (1 + 1j * self.Q[i] *
-                             (self.frequency_array[1:] / self.frequency_R[i] - 
-                              self.frequency_R[i] / self.frequency_array[1:]))
- 
-    def _imped_calc_cpp(self, frequency_array):
+            impedance[1:] += self.R_S[i] / (1 + 1j * self.Q[i] *
+                             (frequency_array[1:] / self.frequency_R[i] - 
+                              self.frequency_R[i] / frequency_array[1:]))
+
+        if just_return:
+            return impedance
+        else:
+            self.frequency_array = frequency_array
+            self.impedance = impedance
+        
+    def _imped_calc_cpp(self, frequency_array, just_return=False):
         r"""
         Impedance calculation method as a function of frequency optimised in C++
         
@@ -390,19 +406,19 @@ class Resonators(_ImpedanceObject):
             Output impedance in :math:`\Omega + j \Omega`
         """
         
-        self.frequency_array = frequency_array
-        self.impedance = np.zeros(len(self.frequency_array), complex)
-        realImp = np.zeros(len(self.frequency_array))
-        imagImp = np.zeros(len(self.frequency_array))
+        realImp = np.zeros(len(frequency_array))
+        imagImp = np.zeros(len(frequency_array))
 
         libblond.fast_resonator_real_imag(realImp.ctypes.data_as(ctypes.c_void_p), imagImp.ctypes.data_as(ctypes.c_void_p),
-               self.frequency_array.ctypes.data_as(ctypes.c_void_p), self.R_S.ctypes.data_as(ctypes.c_void_p),
+               frequency_array.ctypes.data_as(ctypes.c_void_p), self.R_S.ctypes.data_as(ctypes.c_void_p),
                self.Q.ctypes.data_as(ctypes.c_void_p), self.frequency_R.ctypes.data_as(ctypes.c_void_p),
-               ctypes.c_uint(self.n_resonators), ctypes.c_uint(len(self.frequency_array)))
+               ctypes.c_uint(self.n_resonators), ctypes.c_uint(len(frequency_array)))
  
-        self.impedance.real = realImp
-        self.impedance.imag = imagImp
-
+        if just_return:
+            return realImp + 1j * imagImp
+        else:
+            self.frequency_array = frequency_array
+            self.impedance = realImp + 1j * imagImp
 
 
 class TravelingWaveCavity(_ImpedanceObject):
@@ -458,7 +474,7 @@ class TravelingWaveCavity(_ImpedanceObject):
     """
     
     def __init__(self, R_S, frequency_R, a_factor):
-        
+
         _ImpedanceObject.__init__(self)
         
         # Shunt impepdance in :math:`\Omega`
@@ -473,7 +489,7 @@ class TravelingWaveCavity(_ImpedanceObject):
         # Number of resonant modes
         self.n_twc = len(self.R_S)
         
-    def wake_calc(self, time_array):
+    def wake_calc(self, time_array, just_return=False):
         r"""
         Wake calculation method as a function of time.
         
@@ -490,19 +506,23 @@ class TravelingWaveCavity(_ImpedanceObject):
             Output wake in :math:`\Omega / s`    
         """
         
-        self.time_array = time_array
-        self.wake = np.zeros(self.time_array.shape)
+        wake = np.zeros(time_array.shape)
         
         for i in range(0, self.n_twc):
             a_tilde = self.a_factor[i] / (2 * np.pi)
-            indexes = np.where(self.time_array <= a_tilde)
-            self.wake[indexes] += ((np.sign(self.time_array[indexes]) + 1) * 2
+            indexes = np.where(time_array <= a_tilde)
+            wake[indexes] += ((np.sign(time_array[indexes]) + 1) * 2
                                   * self.R_S[i] / a_tilde * 
-                                  (1 - self.time_array[indexes] / a_tilde) *
+                                  (1 - time_array[indexes] / a_tilde) *
                                   np.cos(2 * np.pi * self.frequency_R[i] *
-                                  self.time_array[indexes]))
+                                  time_array[indexes]))
+        if just_return:
+            return wake
+        else:
+            self.time_array = time_array
+            self.wake = wake
     
-    def imped_calc(self, frequency_array):
+    def imped_calc(self, frequency_array, just_return=False):
         r"""
         Impedance calculation method as a function of frequency.
         
@@ -519,34 +539,39 @@ class TravelingWaveCavity(_ImpedanceObject):
             Output impedance in :math:`\Omega + j \Omega`
         """
         
-        self.frequency_array = frequency_array
-        self.impedance = np.zeros(len(self.frequency_array), complex)
-        
+        impedance = np.zeros(len(frequency_array), complex)
+
         warnings.filterwarnings("ignore")  # ignore 1/0 when f = +/- f_R
         for i in range(0, self.n_twc):
             
             Zminus = self.R_S[i] * ((np.sin(self.a_factor[i] / 2 *
-                    (self.frequency_array - self.frequency_R[i])) / 
-                    (self.a_factor[i] / 2 * (self.frequency_array -
+                    (frequency_array - self.frequency_R[i])) / 
+                    (self.a_factor[i] / 2 * (frequency_array -
                     self.frequency_R[i])))**2 - 2j*(self.a_factor[i] *
-                    (self.frequency_array - self.frequency_R[i]) -
-                    np.sin(self.a_factor[i] * (self.frequency_array - 
+                    (frequency_array - self.frequency_R[i]) -
+                    np.sin(self.a_factor[i] * (frequency_array - 
                     self.frequency_R[i]))) / (self.a_factor[i] *
-                    (self.frequency_array - self.frequency_R[i]))**2)
+                    (frequency_array - self.frequency_R[i]))**2)
             
             Zplus = self.R_S[i] * ((np.sin(self.a_factor[i] / 2 * 
-                     (self.frequency_array + self.frequency_R[i])) /
-                     (self.a_factor[i] / 2 * (self.frequency_array + 
+                     (frequency_array + self.frequency_R[i])) /
+                     (self.a_factor[i] / 2 * (frequency_array + 
                      self.frequency_R[i])))**2 - 2j*(self.a_factor[i] *
-                     (self.frequency_array + self.frequency_R[i]) - 
-                     np.sin(self.a_factor[i] * (self.frequency_array +
+                     (frequency_array + self.frequency_R[i]) - 
+                     np.sin(self.a_factor[i] * (frequency_array +
                      self.frequency_R[i]))) / (self.a_factor[i] *
-                     (self.frequency_array + self.frequency_R[i]))**2)
+                     (frequency_array + self.frequency_R[i]))**2)
             
-            self.impedance += Zplus + Zminus   
+            impedance += Zplus + Zminus   
             # finite impedance when f = +/- f_R
-            self.impedance[np.isnan(self.impedance)] = self.R_S[i]
+            impedance[np.isnan(impedance)] = self.R_S[i]
         warnings.filterwarnings("default")
+
+        if just_return:
+            return impedance
+        else:
+            self.impedance = impedance
+            self.frequency_array = frequency_array
 
 
 class ResistiveWall(_ImpedanceObject):
@@ -633,7 +658,7 @@ class ResistiveWall(_ImpedanceObject):
         self.__resistivity = 1 / conductivity
         self.__conductivity = conductivity
     
-    def imped_calc(self, frequency_array):
+    def imped_calc(self, frequency_array, just_return=False):
         r"""
         Impedance calculation method as a function of frequency.
         
@@ -650,12 +675,16 @@ class ResistiveWall(_ImpedanceObject):
             Output impedance in :math:`\Omega + j \Omega`
         """
         
-        self.frequency_array = frequency_array
-                
-        self.impedance = (self.Z0 * c * self.pipe_length /
-            (np.pi * (1.0 - 1j*np.sign(self.frequency_array)) * 2 *
+        impedance = (self.Z0 * c * self.pipe_length /
+            (np.pi * (1.0 - 1j*np.sign(frequency_array)) * 2 *
             self.pipe_radius * c * np.sqrt(self.conductivity * self.Z0 * c /
-            (4.0 * np.pi * np.abs(self.frequency_array)) )
-            + 1j * self.pipe_radius**2.0 * 2.0 * np.pi * self.frequency_array))
+            (4.0 * np.pi * np.abs(frequency_array)) )
+            + 1j * self.pipe_radius**2.0 * 2.0 * np.pi * frequency_array))
 
-        self.impedance[np.isnan(self.impedance)]= 0.0
+        impedance[np.isnan(impedance)]= 0.0
+        
+        if just_return:
+            return impedance
+        else:
+            self.frequency_array = frequency_array
+            self.impedance = impedance
