@@ -357,9 +357,11 @@ def matched_from_line_density(beam, full_ring_and_RF, line_density_input=None,
         # Calculating the induced voltage
         induced_voltage_object.induced_voltage_sum()
         
+        gc.collect()
         return [hamiltonian_coord, distribution_function_], \
                induced_voltage_object
     else:
+        gc.collect()
         return [hamiltonian_coord, distribution_function_],\
                [time_line_den, line_density_]
 
@@ -368,7 +370,7 @@ def matched_from_distribution_function(beam, full_ring_and_RF,
                                distribution_user_table=None,
                                main_harmonic_option='lowest_freq',
                                TotalInducedVoltage=None,
-                               n_iterations=1, n_points_potential=1e4,
+                               n_iterations=1, n_points_potential=int(1e4),
                                n_points_grid=int(1e3),
                                dt_margin_percent=0.40,
                                extraVoltageDict=None, seed=None,
@@ -686,7 +688,7 @@ def X0_from_bunch_length(bunch_length, bunch_length_fit, X_grid, sorted_X_dE0,
                         profile.gaussian_fit()
                         tau = profile.bl_gauss
                     elif bunch_length_fit == 'fwhm':
-                        profile.fwhm()
+                        profile.fwhm()  # computes 4sigma_FWHM
                         tau = profile.bunchLength                        
         
         # Update of the interval for the next iteration
