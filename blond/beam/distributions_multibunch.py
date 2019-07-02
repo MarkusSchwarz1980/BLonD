@@ -17,14 +17,15 @@ from ..beam.distributions import matched_from_distribution_function,\
                            distribution_function, potential_well_cut,\
                            X0_from_bunch_length
 
-def matched_from_distribution_density_multibunch(beam, Ring, FullRingAndRF, distribution_options_list,
+def matched_from_distribution_density_multibunch(beam, Ring, FullRingAndRF,
+                                      distribution_options_list,
                                       n_bunches, bunch_spacing_buckets,
-                                      intensity_list = None,
-                                      minimum_n_macroparticles = None,
-                                      main_harmonic_option = 'lowest_freq', 
-                                      TotalInducedVoltage = None,
-                                      n_iterations_input = 1,
-                                      plot_option = False, seed=None,
+                                      intensity_list=None,
+                                      minimum_n_macroparticles=None,
+                                      main_harmonic_option='lowest_freq', 
+                                      TotalInducedVoltage=None,
+                                      n_iterations=1,
+                                      plot_option=False, seed=None,
                                       n_points_potential=int(1e4)):
     '''
     *Function to generate a multi-bunch beam using the matched_from_distribution_density
@@ -50,7 +51,7 @@ def matched_from_distribution_density_multibunch(beam, Ring, FullRingAndRF, dist
     
     # check if bunch_spacing_buckets has more than one element
     try:
-        if len(bunch_spacing_buckets) > 1:
+        if len(bunch_spacing_buckets) > 0:
             bunch_position_buckets_list = bunch_spacing_buckets
     except TypeError:
         bunch_position_buckets_list = np.arange(n_bunches)*bunch_spacing_buckets
@@ -157,7 +158,7 @@ def matched_from_distribution_density_multibunch(beam, Ring, FullRingAndRF, dist
                        distribution_user_table=distribution_user_table,
                        main_harmonic_option=main_harmonic_option,
                        TotalInducedVoltage=TotalInducedVoltage,
-                       n_iterations=n_iterations_input,
+                       n_iterations=n_iterations,
                        extraVoltageDict=extraVoltageDict,
                        distribution_exponent=distribution_exponent,
                        distribution_type=distribution_type,
@@ -233,13 +234,13 @@ def matched_from_distribution_density_multibunch(beam, Ring, FullRingAndRF, dist
     beam.dE = beamIteration.dE
     
     
-def matched_from_line_density_multibunch(beam, Ring,
-                        FullRingAndRF, line_density_options_list, n_bunches,
+def matched_from_line_density_multibunch(beam, Ring, FullRingAndRF,
+                        line_density_options_list, n_bunches,
                         bunch_spacing_buckets, intensity_list=None,
                         minimum_n_macroparticles=None,
                         main_harmonic_option='lowest_freq',
                         TotalInducedVoltage=None, half_option='first',
-                        plot_option=False, seed=None):
+                        plot_option=False, seed=None, n_points_potential=int(1e4)):
     '''
     *Function to generate a multi-bunch beam using the matched_from_distribution_density
     function for each bunch. The extra parameters to include are the number of 
@@ -263,7 +264,7 @@ def matched_from_line_density_multibunch(beam, Ring,
     
     # check if bunch_spacing_buckets has more than one element
     try:
-        if len(bunch_spacing_buckets) > 1:
+        if len(bunch_spacing_buckets) > 0:
             bunch_position_buckets_list = bunch_spacing_buckets
     except TypeError:
         bunch_position_buckets_list = np.arange(n_bunches)*bunch_spacing_buckets
@@ -358,7 +359,7 @@ def matched_from_line_density_multibunch(beam, Ring,
                               bunch_length=bunch_length,
                               line_density_type=line_density_type,
                               line_density_exponent=line_density_exponent,
-                              seed=seed)
+                              seed=seed, n_points_potential=n_points_potential)
 
         if indexBunch==0:
             beamIteration.dt = bunch.dt
@@ -409,7 +410,7 @@ def matched_from_line_density_multibunch(beam, Ring,
     beam.dE = beamIteration.dE
 
 
-def match_beam_from_distribution(beam, FullRingAndRF, Ring,
+def match_beam_from_distribution(beam, Ring, FullRingAndRF,
                                   distribution_options, n_bunches,
                                   bunch_spacing_buckets,
                                   main_harmonic_option='lowest_freq',
@@ -441,7 +442,7 @@ def match_beam_from_distribution(beam, FullRingAndRF, Ring,
 
     # check if bunch_spacing_buckets has more than one element
     try:
-        if len(bunch_spacing_buckets) > 1:
+        if len(bunch_spacing_buckets) > 0:
             bunch_position_buckets_list = bunch_spacing_buckets
     except TypeError:
         bunch_position_buckets_list = np.arange(n_bunches)*bunch_spacing_buckets
