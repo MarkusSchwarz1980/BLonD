@@ -66,7 +66,8 @@ class FullRingAndRF(object):
         is set to 0 by default. It assumes also that the slippage factor is the
         same in the whole ring.
         """
-
+        #TODO: indcate modified function
+#        print("using Joel's last_dt")
         voltages = np.array([])
         omega_rf = np.array([])
         phi_offsets = np.array([])
@@ -85,9 +86,9 @@ class FullRingAndRF(object):
         omega_rf = np.array(omega_rf, ndmin=2)
         phi_offsets = np.array(phi_offsets, ndmin=2)
 
-        if main_harmonic_option is 'lowest_freq':
+        if main_harmonic_option == 'lowest_freq':
             main_omega_rf = np.min(omega_rf)
-        elif main_harmonic_option is 'highest_voltage':
+        elif main_harmonic_option == 'highest_voltage':
             main_omega_rf = np.min(omega_rf[voltages == np.max(voltages)])
         elif isinstance(main_harmonic_option, int) or \
                 isinstance(main_harmonic_option, float):
@@ -105,6 +106,8 @@ class FullRingAndRF(object):
 
             first_dt = - time_array_margin/2
             last_dt = 2*np.pi/main_omega_rf + time_array_margin/2
+            #TODO: mind the additional factor 1/2 to agree with Joel
+#            last_dt = 2*np.pi/main_omega_rf + time_array_margin/2/2
 
             time_array = np.linspace(float(first_dt), float(last_dt), n_points)
 
@@ -312,9 +315,9 @@ class RingAndRFTracker(object):
 
         """
 
-        voltage_kick = np.ascontiguousarray(self.charge*self.voltage[:, index])
-        omegarf_kick = np.ascontiguousarray(self.omega_rf[:, index])
-        phirf_kick = np.ascontiguousarray(self.phi_rf[:, index])
+#        voltage_kick = np.ascontiguousarray(self.charge*self.voltage[:, index])
+#        omegarf_kick = np.ascontiguousarray(self.omega_rf[:, index])
+#        phirf_kick = np.ascontiguousarray(self.phi_rf[:, index])
         bm.kick(self, beam_dt, beam_dE, index)
 
     def drift(self, beam_dt, beam_dE, index):

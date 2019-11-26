@@ -240,7 +240,8 @@ def matched_from_line_density_multibunch(beam, Ring, FullRingAndRF,
                         minimum_n_macroparticles=None,
                         main_harmonic_option='lowest_freq',
                         TotalInducedVoltage=None, half_option='first',
-                        plot_option=False, seed=None, n_points_potential=int(1e4)):
+                        plot_option=False, seed=None, n_points_potential=int(1e4),
+                        n_iterations=100):
     '''
     *Function to generate a multi-bunch beam using the matched_from_distribution_density
     function for each bunch. The extra parameters to include are the number of 
@@ -359,7 +360,8 @@ def matched_from_line_density_multibunch(beam, Ring, FullRingAndRF,
                               bunch_length=bunch_length,
                               line_density_type=line_density_type,
                               line_density_exponent=line_density_exponent,
-                              seed=seed, n_points_potential=n_points_potential)
+                              seed=seed, n_points_potential=n_points_potential,
+                              n_iterations=n_iterations)
 
         if indexBunch==0:
             beamIteration.dt = bunch.dt
@@ -409,6 +411,9 @@ def matched_from_line_density_multibunch(beam, Ring, FullRingAndRF,
     beam.dt = beamIteration.dt
     beam.dE = beamIteration.dE
 
+def is_slice_in_list(s,l):
+    len_s = len(s) #so we don't recompute length of s on every iteration
+    return any(s == l[i:len_s+i] for i in range(len(l) - len_s+1))
 
 def match_beam_from_distribution(beam, Ring, FullRingAndRF,
                                   distribution_options, n_bunches,
@@ -416,7 +421,7 @@ def match_beam_from_distribution(beam, Ring, FullRingAndRF,
                                   main_harmonic_option='lowest_freq',
                                   TotalInducedVoltage=None, n_iterations=1,
                                   n_points_potential=1e4,
-                                  dt_margin_percent=0.40, seed=None,):
+                                  dt_margin_percent=0.40, seed=None):
     '''
     *This function generates n equaly spaced bunches for a stationary 
     distribution and try to match them with intensity effects.*
@@ -432,7 +437,10 @@ def match_beam_from_distribution(beam, Ring, FullRingAndRF,
     - The action J can be integrated over the whole phase space
     - 2piJ = emittance, this restrict the value of J0 (or H0)
     - with g0(H) we can randomize the macroparticles*
-    '''           
+    '''
+    #TODO: indicate modified function
+    print("Using Joel's version of matched_beam_from_distribution")
+
 #------------------------------------------------------------------------
 # USEFUL VARIABLES
 #------------------------------------------------------------------------
@@ -475,15 +483,17 @@ def match_beam_from_distribution(beam, Ring, FullRingAndRF,
 #------------------------------------------------------------------------
 # GENERATES N BUNCHES WITHOUT INTENSITY EFFECTS
 #------------------------------------------------------------------------
-
+#    print(n_points_potential, dt_margin_percent, main_harmonic_option)
     FullRingAndRF.potential_well_generation(n_points=int(n_points_potential), 
                                     dt_margin_percent=dt_margin_percent, 
                                     main_harmonic_option=main_harmonic_option)
-
+     #TODO: changed by Markus
     # Restrict the potential well inside the separatrix and put min on 0
-    potential_well_coordinates, potential_well = potential_well_cut(\
-        FullRingAndRF.potential_well_coordinates,\
-        FullRingAndRF.potential_well)
+#    potential_well_coordinates, potential_well = potential_well_cut(\
+#        FullRingAndRF.potential_well_coordinates,\
+#        FullRingAndRF.potential_well)  # removed by Markus
+    potential_well_coordinates = FullRingAndRF.potential_well_coordinates  # added by Markus
+    potential_well = FullRingAndRF.potential_well  # added by Markus
     potential_well = potential_well - np.min(potential_well)
     
     # Temporary beam, everything is done in the first bucket and then
@@ -491,18 +501,21 @@ def match_beam_from_distribution(beam, Ring, FullRingAndRF,
     temporary_beam = Beam(Ring, n_macro_per_bunch, intensity_per_bunch)
 
     # Bunches placed in all the buckets without intensity effects
-    # Loop the match function to have "different" bunches in each bucket
     for indexBunch in range(n_bunches):
-        print(f'generating bunch {indexBunch+1}')
+        #TODO: changed by Markus
+        t, pot = potential_well_cut(potential_well_coordinates,\
+                                    potential_well)  # added by Markus
         match_a_bunch(normalization_DeltaE, temporary_beam,
-                      potential_well_coordinates,
-                      potential_well, seed, distribution_options,
-                      full_ring_and_RF=FullRingAndRF)
+                      t, pot, seed, distribution_options,
+                      full_ring_and_RF=FullRingAndRF)  # added by Markus
+#        match_a_bunch(normalization_DeltaE, temporary_beam,
+#                      potential_well_coordinates,
+#                      potential_well, seed, distribution_options,
+#                      full_ring_and_RF=FullRingAndRF)  # added by Markus
         if indexBunch==0:
             beam.dt = temporary_beam.dt
             beam.dE = temporary_beam.dE
         else:
-#            beam.dt = np.append(beam.dt, temporary_beam.dt +(indexBunch *bunch_spacing_buckets *bucket_size_tau))
             beam.dt = np.append(beam.dt, temporary_beam.dt +
                         (bunch_position_buckets_list[indexBunch] * bucket_size_tau))
             beam.dE = np.append(beam.dE, temporary_beam.dE)
@@ -518,28 +531,29 @@ def match_beam_from_distribution(beam, Ring, FullRingAndRF,
             # Compute the induced voltage/potential for all the beam
             profile.track()
             TotalInducedVoltage.induced_voltage_sum()
-            
+#            print(TotalInducedVoltage.induced_voltage[0], TotalInducedVoltage.induced_voltage[-1], TotalInducedVoltage.induced_voltage.shape)
             induced_voltage_coordinates = TotalInducedVoltage.time_array
             induced_voltage = TotalInducedVoltage.induced_voltage
             induced_potential = - normalization_potential * cumtrapz(induced_voltage, dx=induced_voltage_coordinates[1] - induced_voltage_coordinates[0], initial=0)
 
             for indexBunch in range(n_bunches):
-                print(f'...generating bunch {indexBunch+1}')
                 # Extract the induced potential for the specific bucket
-#                induced_potential_bunch = np.interp(potential_well_coordinates\
-#                + indexBunch*bunch_spacing_buckets*bucket_size_tau,\
-#                induced_voltage_coordinates, induced_potential)
                 induced_potential_bunch = np.interp(potential_well_coordinates\
                 + bunch_position_buckets_list[indexBunch]*bucket_size_tau,\
                 induced_voltage_coordinates, induced_potential)
-
+                #TODO: changed by Markus
+                t, pot = potential_well_cut(potential_well_coordinates,\
+                                            potential_well+induced_potential_bunch)  # added by Markus                
+                match_a_bunch(normalization_DeltaE, temporary_beam,
+                              t, pot, seed, distribution_options,
+                              full_ring_and_RF=FullRingAndRF)  # added by Markus
                 # Recompute the phase space distribution for the new
                 # perturbed potential (containing induced_potential_bunch)
-                match_a_bunch(normalization_DeltaE, temporary_beam,
-                              potential_well_coordinates,
-                              potential_well+induced_potential_bunch, seed,
-                              distribution_options,
-                              full_ring_and_RF=FullRingAndRF)
+#                match_a_bunch(normalization_DeltaE, temporary_beam,
+#                              potential_well_coordinates,
+#                              potential_well+induced_potential_bunch, seed,
+#                              distribution_options,
+#                              full_ring_and_RF=FullRingAndRF)  # removed by Markus
 
                 dt = temporary_beam.dt
                 dE = temporary_beam.dE
@@ -729,7 +743,7 @@ def match_beam_from_distribution_multibatch(beam, FullRingAndRF, Ring,
 
 def compute_X_grid(normalization_DeltaE, time_array, potential_well,
                    distribution_variable):
-    
+#    print(time_array)
     # Delta Energy array
     max_DeltaE = np.sqrt(np.max(potential_well)/normalization_DeltaE)
     coord_array_DeltaE = np.linspace(-float(max_DeltaE),float(max_DeltaE), len(time_array))
@@ -799,15 +813,15 @@ def match_a_bunch(normalization_DeltaE, beam, potential_well_coordinates,\
         distribution_variable = distribution_options['density_variable']
     else:
         distribution_variable = 'Hamiltonian'
-
+#    print(potential_well_coordinates)
     H, J, X_grid, time_grid, deltaE_grid, time_resolution, energy_resolution =\
     compute_X_grid(normalization_DeltaE, potential_well_coordinates,
                    potential_well,distribution_variable)
     
     # Choice of either H or J as the variable used
-    if distribution_variable is 'Action':
+    if distribution_variable == 'Action':
         sorted_X = J
-    elif distribution_variable is 'Hamiltonian':
+    elif distribution_variable == 'Hamiltonian':
         sorted_X = H
     else:
         #DistributionError
@@ -828,7 +842,7 @@ def match_a_bunch(normalization_DeltaE, beam, potential_well_coordinates,\
     distribution = distribution_function(X_grid, distribution_type, X0, exponent=distribution_exponent)
     distribution[X_grid>np.max(H)] = 0
     distribution = distribution / np.sum(distribution)
-
+    
     populate_bunch(beam, time_grid, deltaE_grid, distribution, time_resolution,
                    energy_resolution, seed)
 

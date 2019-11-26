@@ -404,7 +404,7 @@ def matched_from_distribution_function(beam, full_ring_and_RF,
     distribution_options['user_table_action'] = array of action (in H or in J)
     and distribution_options['user_table_distribution']*
     '''
-        
+    
     # Loading the distribution function if provided by the user
     if distribution_function_input is not None:
         distribution_function_ = distribution_function_input
@@ -463,7 +463,7 @@ def matched_from_distribution_function(beam, full_ring_and_RF,
 
         print('Matching the bunch... (iteration: ' + str(i) + ' and sse: ' +
               str(sse) +')')
-                
+        
         # Process the potential well in order to take a frame around the separatrix
         if process_pot_well == False:
             time_potential_sep, potential_well_sep = time_potential, total_potential
@@ -628,7 +628,8 @@ def matched_from_distribution_function(beam, full_ring_and_RF,
 def X0_from_bunch_length(bunch_length, bunch_length_fit, X_grid, sorted_X_dE0,
                          n_points_grid, time_potential_low_res,
                          distribution_function_, distribution_type, 
-                         distribution_exponent, beam, full_ring_and_RF):
+                         distribution_exponent, beam, full_ring_and_RF,
+                         max_loop_iterations=10):
     '''
     Function to find the corresponding H0 or J0 for a given bunch length.
     Used by matched_from_distribution_function()
@@ -645,7 +646,8 @@ def X0_from_bunch_length(bunch_length, bunch_length_fit, X_grid, sorted_X_dE0,
     bin_size = (time_potential_low_res[1] - time_potential_low_res[0])
     
     # Iteration to find H0/J0 from the bunch length
-    while np.abs(bunch_length-tau) > bin_size:
+    loopIt = 0
+    while (np.abs(bunch_length-tau) > bin_size) and (loopIt < max_loop_iterations):
         # Takes middle point of the interval [X_low,X_hi]
         X0 = 0.5 * (X_low + X_hi)
         
@@ -707,8 +709,15 @@ def X0_from_bunch_length(bunch_length, bunch_length_fit, X_grid, sorted_X_dE0,
         if (X0-X_min) < X_accuracy:
             print('WARNING: The desired bunch length is too small ' +
                   'to be generated accurately!')
-                  
+        loopIt += 1
+    
+    if loopIt >= max_loop_iterations:
+        print('WARNING: Maximum number of loop iterations exceeded!' +
+              'Desired input is %.2e, ' % (bunch_length) +
+              'the generation gave %.2e, ' % (tau) +
+              'the error is %.2e' % (bunch_length-tau))
 #    return 0.5 * (X_low + X_hi)
+    
     return X0
 
 def populate_bunch(beam, time_grid, deltaE_grid, density_grid, time_step,
