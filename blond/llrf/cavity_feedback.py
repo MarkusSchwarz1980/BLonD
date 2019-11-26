@@ -119,8 +119,8 @@ class SPSCavityFeedback(object):
                                          Commissioning=self.Commissioning)
 
         # Set up logging
-        self.logger = logging.getLogger(__class__.__name__)
-        self.logger.info("Class initialized")
+#        self.logger = logging.getLogger(__class__.__name__)
+#        self.logger.info("Class initialized")
 
         # Initialise OTFB without beam
         self.turns = int(turns)
@@ -156,7 +156,7 @@ class SPSCavityFeedback(object):
             plt.grid()
 
         for i in range(self.turns):
-            self.logger.debug("Pre-tracking w/o beam, iteration %d", i)
+#            self.logger.debug("Pre-tracking w/o beam, iteration %d", i)
             self.OTFB_4.track_no_beam()
             if debug:
                 plt.plot(self.OTFB_4.profile.bin_centers*1e6,
@@ -251,15 +251,15 @@ class SPSOneTurnFeedback(object):
                  Commissioning=CavityFeedbackCommissioning()):
 
         # Set up logging
-        self.logger = logging.getLogger(__class__.__name__)
+#        self.logger = logging.getLogger(__class__.__name__)
 
         # Commissioning options
         self.open_loop = Commissioning.open_loop
-        self.logger.debug("Opening overall OTFB loop")
+#        self.logger.debug("Opening overall OTFB loop")
         self.open_FB = Commissioning.open_FB
-        self.logger.debug("Opening feedback of drive correction")
+#        self.logger.debug("Opening feedback of drive correction")
         self.open_drive = Commissioning.open_drive
-        self.logger.debug("Opening drive to generator")
+#        self.logger.debug("Opening drive to generator")
 
         # Read input
         self.rf = RFStation
@@ -287,9 +287,9 @@ class SPSOneTurnFeedback(object):
             #FeedbackError
             raise RuntimeError("ERROR in SPSOneTurnFeedback: argument" +
                                " n_sections has invalid value!")
-        self.logger.debug("SPS OTFB cavities: %d, sections: %d, voltage" +
-                          " partition %.2f, gain: %.2e", self.n_cavities,
-                          n_sections, self.V_part, self.G_tx)
+#        self.logger.debug("SPS OTFB cavities: %d, sections: %d, voltage" +
+#                          " partition %.2f, gain: %.2e", self.n_cavities,
+#                          n_sections, self.V_part, self.G_tx)
 
         # TWC resonant frequency
         self.omega_r = self.TWC.omega_r
@@ -307,8 +307,8 @@ class SPSOneTurnFeedback(object):
         self.rf_centers = (np.arange(self.n_coarse) + 0.5) * self.rf.t_rf[0, 0]
 
         # TODO: Bin size can change! Update affected variables!!
-        self.logger.debug("Length of arrays in generator path %d",
-                          self.n_coarse)
+#        self.logger.debug("Length of arrays in generator path %d",
+#                          self.n_coarse)
 
         # Initialise comb filter
         self.dV_gen_prev = np.zeros(self.n_coarse, dtype=complex)
@@ -316,7 +316,7 @@ class SPSOneTurnFeedback(object):
 
         # Initialise cavity filter (moving average)
         self.n_mov_av = int(self.TWC.tau/self.rf.t_rf[0, 0])
-        self.logger.debug("Moving average over %d points", self.n_mov_av)
+#        self.logger.debug("Moving average over %d points", self.n_mov_av)
         # TODO: update condition for new n_mov_av
         if self.n_mov_av < 2:
             #FeedbackError
@@ -330,7 +330,7 @@ class SPSOneTurnFeedback(object):
         # Pre-compute factor for semi-analytic method
         self.pre_compute_semi_analytic_factor(self.rf_centers)
 
-        self.logger.info("Class initialized")
+#        self.logger.info("Class initialized")
 
     def track(self):
         """Turn-by-turn tracking method."""
@@ -382,18 +382,18 @@ class SPSOneTurnFeedback(object):
 
         # Generator-induced voltage from generator current
         self.generator_induced_voltage()
-        self.logger.debug("Total voltage to generator %.3e V",
-                          np.mean(np.absolute(self.V_gen)))
-        self.logger.debug("Total current from generator %.3e A",
-                          np.mean(np.absolute(self.I_gen))
-                          / self.profile.bin_size)
+#        self.logger.debug("Total voltage to generator %.3e V",
+#                          np.mean(np.absolute(self.V_gen)))
+#        self.logger.debug("Total current from generator %.3e A",
+#                          np.mean(np.absolute(self.I_gen))
+#                          / self.profile.bin_size)
 
         # Without beam, total voltage equals generator-induced voltage
         self.V_coarse_tot = self.V_coarse_ind_gen
 
-        self.logger.debug(
-            "Average generator voltage, last half of array %.3e V",
-            np.mean(np.absolute(self.V_coarse_ind_gen[int(0.5*self.n_coarse):])))
+#        self.logger.debug(
+#            "Average generator voltage, last half of array %.3e V",
+#            np.mean(np.absolute(self.V_coarse_ind_gen[int(0.5*self.n_coarse):])))
 
     def llrf_model(self):
         """Models the LLRF part of the OTFB.
@@ -423,20 +423,20 @@ class SPSOneTurnFeedback(object):
 
         # Closed-loop gain
         self.dV_gen *= self.G_llrf
-        self.logger.debug("Set voltage %.6f MV",
-                          1e-6*np.mean(np.absolute(self.V_set)))
-        self.logger.debug("Antenna voltage %.6f MV",
-                          1e-6*np.mean(np.absolute(self.V_coarse_tot)))
-        self.logger.debug("Voltage error %.6f MV",
-                          1e-6*np.mean(np.absolute(self.dV_gen)))
+#        self.logger.debug("Set voltage %.6f MV",
+#                          1e-6*np.mean(np.absolute(self.V_set)))
+#        self.logger.debug("Antenna voltage %.6f MV",
+#                          1e-6*np.mean(np.absolute(self.V_coarse_tot)))
+#        self.logger.debug("Voltage error %.6f MV",
+#                          1e-6*np.mean(np.absolute(self.dV_gen)))
 
         # One-turn delay comb filter; memorise the value of the previous turn
         self.dV_gen = comb_filter(self.dV_gen_prev, self.dV_gen, self.a_comb)
         self.dV_gen_prev = np.copy(self.dV_gen)
 
         # Modulate from omega_rf to omega_r
-        self.dV_gen = modulator(self.dV_gen, self.omega_c, self.omega_r,
-                                self.rf.t_rf[0, self.counter])
+        self.dV_gen = modulator(self.dV_gen, self.omega_r, self.omega_c,
+                                self.rf.t_rf[0, self.counter])  #TODO orig c r
 
         # Shift signals with the delay time
         dV_gen_in = np.copy(self.dV_gen)
@@ -471,10 +471,10 @@ class SPSOneTurnFeedback(object):
         """
 
         # Add correction to the drive already existing
-        self.V_gen = self.open_FB * modulator(self.dV_gen, self.omega_r,
-                                              self.omega_c,
+        self.V_gen = self.open_FB * modulator(self.dV_gen, self.omega_c,
+                                              self.omega_r,
                                               self.rf.t_rf[0, self.counter]) \
-            + self.open_drive*self.V_set
+            + self.open_drive*self.V_set    #TODO orig r c
 
         # Generator charge from voltage, transmitter model
         self.I_gen = self.G_tx*self.V_gen\
@@ -512,7 +512,7 @@ class SPSOneTurnFeedback(object):
 
         """
 
-        self.logger.debug("Matrix convolution for V_ind")
+#        self.logger.debug("Matrix convolution for V_ind")
 
         if name == "beam":
             # Compute the beam-induced voltage on the fine grid by convolution
@@ -580,7 +580,7 @@ class SPSOneTurnFeedback(object):
             Factor that is used to compute the beam-induced voltage
         """
 
-        self.logger.info("Pre-computing semi-analytic factor")
+#        self.logger.info("Pre-computing semi-analytic factor")
 
         n_slices_per_bucket = 20
 
