@@ -339,17 +339,17 @@ class Resonators(_ImpedanceObject):
             Output wake in :math:`\Omega / s`    
         """
         
-        wake = np.zeros(self.time_array.shape)
+        wake = np.zeros(time_array.shape)
         
         for i in range(0, self.n_resonators):
        
             alpha = self.omega_R[i] / (2 * self.Q[i])
             omega_bar = np.sqrt(self.omega_R[i] ** 2 - alpha ** 2)
             
-            wake += ((np.sign(self.time_array) + 1) * self.R_S[i] *
-                         alpha * np.exp(-alpha * self.time_array) *
-                         (np.cos(omega_bar * self.time_array) - alpha /
-                          omega_bar * np.sin(omega_bar * self.time_array)))
+            wake += ((np.sign(time_array) + 1) * self.R_S[i] *
+                         alpha * np.exp(-alpha * time_array) *
+                         (np.cos(omega_bar * time_array) - alpha /
+                          omega_bar * np.sin(omega_bar * time_array)))
         
         if just_return:
             return wake
