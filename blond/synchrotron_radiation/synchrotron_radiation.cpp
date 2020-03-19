@@ -23,8 +23,6 @@ Project website: http://blond.web.cern.ch/
 std::random_device rd;
 boost::mt19937_64 gen(rd());
 boost::normal_distribution<> dist(0.0, 1.0);
-// gen.seed(std::random_device{}());
-// boost::variate_generator< boost::mt19937_64, boost::normal_distribution<> > dist(gen, distribution);
     
 #else
 std::random_device rd;
@@ -67,7 +65,7 @@ extern "C" void synchrotron_radiation_full(double * __restrict__ beam_dE, const 
     const double const_quantum_exc = 2.0 * sigma_dE / sqrt(tau_z) * energy;
 
     // Random number generator for the quantum excitation term
-    
+
     for (int j=0; j<n_kicks; j++){
         // Compute synchrotron radiation damping term
         synchrotron_radiation(beam_dE, U0, n_macroparticles, tau_z, 1);
@@ -82,5 +80,13 @@ extern "C" void synchrotron_radiation_full(double * __restrict__ beam_dE, const 
         for (int i = 0; i < n_macroparticles; i++){
             beam_dE[i] += const_quantum_exc * random_array[i];
         }
+    
     }
+}
+
+
+// Seed the random number generator. Called by __init__ of SynchrotronRadiation
+// if seed key word argument is not None
+extern "C" void set_random_seed(const int seed) {
+    gen.seed(seed);
 }
