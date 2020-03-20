@@ -15,6 +15,7 @@ Project website: http://blond.web.cern.ch/
 #include <math.h>
 #include <stdlib.h>
 #include <random>
+//#include <iostream>
 
 #ifdef BOOST
 #include <boost/random.hpp>
@@ -56,11 +57,11 @@ extern "C" void synchrotron_radiation(double * __restrict__ beam_dE, const doubl
 // This function calculates and applies synchrotron radiation damping and
 // quantum excitation terms
 extern "C" void synchrotron_radiation_full(double * __restrict__ beam_dE, const double U0,
-                                        const int n_macroparticles, const double sigma_dE,
-                                        const double tau_z,const double energy,
-                                        double * __restrict__ random_array,
-                                        const int n_kicks){
-    
+                                            const int n_macroparticles, const double sigma_dE,
+                                            const double tau_z,const double energy,
+                                            double * __restrict__ random_array,
+                                            const int n_kicks){
+    //std::cout << "o" << std::endl;
     // Quantum excitation constant
     const double const_quantum_exc = 2.0 * sigma_dE / sqrt(tau_z) * energy;
 
@@ -79,6 +80,38 @@ extern "C" void synchrotron_radiation_full(double * __restrict__ beam_dE, const 
         #pragma omp parallel for
         for (int i = 0; i < n_macroparticles; i++){
             beam_dE[i] += const_quantum_exc * random_array[i];
+        }
+    
+    }
+}
+
+
+// This function calculates and applies synchrotron radiation damping and
+// quantum excitation terms
+// mod by Ivan
+extern "C" void synchrotron_radiation_full_ivan(double * __restrict__ beam_dE, const double U0,
+                                        const int n_macroparticles, const double sigma_dE,
+                                        const double tau_z,const double energy,
+                                        double * __restrict__ random_array,
+                                        const int n_kicks){
+    //std::cout << "i" << std::endl;
+    // Quantum excitation and synchrotron radiation constants
+    const double const_quantum_exc = 2.0 * sigma_dE / sqrt(tau_z) * energy;
+    const double const_synch_rad = 2.0 / tau_z;
+    
+    // Random number generator for the quantum excitation term
+
+    for (int j=0; j<n_kicks; j++){
+    
+        // Re-calculate the random (Gaussian) number array
+        for (int i = 0; i < n_macroparticles; i++){
+            random_array[i] = dist(gen);
+        }
+        
+        // Applies the quantum excitation term
+        #pragma omp parallel for
+        for (int i = 0; i < n_macroparticles; i++){
+            beam_dE[i] += const_quantum_exc * random_array[i] - const_synch_rad * beam_dE[i] - U0;
         }
     
     }

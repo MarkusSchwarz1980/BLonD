@@ -178,6 +178,17 @@ def synchrotron_radiation(dE, U0, n_kicks, tau_z):
         ct.c_int(n_kicks))
 
 
+def synchrotron_radiation_full_ivan(dE, U0, n_kicks, tau_z, sigma_dE, energy,
+                               random_array):
+    __lib.synchrotron_radiation_full_ivan(
+        __getPointer(dE),
+        ct.c_double(U0 / n_kicks),
+        __getLen(dE),
+        ct.c_double(sigma_dE),
+        ct.c_double(tau_z * n_kicks),
+        ct.c_double(energy),
+        __getPointer(random_array),
+        ct.c_int(n_kicks))
 def synchrotron_radiation_full(dE, U0, n_kicks, tau_z, sigma_dE, energy,
                                random_array):
     __lib.synchrotron_radiation_full(
@@ -189,7 +200,6 @@ def synchrotron_radiation_full(dE, U0, n_kicks, tau_z, sigma_dE, energy,
         ct.c_double(energy),
         __getPointer(random_array),
         ct.c_int(n_kicks))
-
 
 def set_random_seed(seed):
     __lib.set_random_seed(ct.c_int(seed))

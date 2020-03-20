@@ -15,9 +15,8 @@ Unittest for synchrotron_radiation.synchrotron_radiation.py
 
 import unittest
 import numpy as np
-from scipy.constants import epsilon_0, e, m_e, c
+# from scipy.constants import epsilon_0, e, m_e, c
 
-from blond.utils import bmath as bm
 from blond.input_parameters.ring import Ring
 from blond.input_parameters.rf_parameters import RFStation
 from blond.beam.beam import Beam, Positron
@@ -34,17 +33,17 @@ class TestSynchtrotronRadiation(unittest.TestCase):
         energy = 2.5e9  # [eV]
         alpha = 0.0082
         self.R_bend = 5.559  # bending radius [m]
-        C_gamma = e**2 / (3*epsilon_0 * (m_e*c**2)**4)  # [m J^3]
-        C_gamma *= e**3  # [m eV^3]
+        # C_gamma = e**2 / (3*epsilon_0 * (m_e*c**2)**4)  # [m J^3]
+        # C_gamma *= e**3  # [m eV^3]
   
         harmonic_number = 184
         voltage = 800e3  # eV
         phi_offsets = 0
        
         self.seed = 1234        
-        intensity = 2.299e9
-        n_macroparticles = int(1e4)
-        sigma_dt = 10e-12  # RMS, [s]
+        self.intensity = 2.299e9
+        self.n_macroparticles = int(1e2)
+        self.sigma_dt = 10e-12  # RMS, [s]
         
         self.ring = Ring(circumference, alpha, energy, Positron(),
                     synchronous_data_type='total energy', n_turns=1)
@@ -52,12 +51,12 @@ class TestSynchtrotronRadiation(unittest.TestCase):
         self.rf_station = RFStation(self.ring, harmonic_number, voltage,
                                     phi_offsets, n_rf=1)
 
-        self.beam = Beam(self.ring, n_macroparticles, intensity)
+        self.beam = Beam(self.ring, self.n_macroparticles, self.intensity)
 
-        bigaussian(self.ring, self.rf_station, self.beam, sigma_dt, seed=self.seed)
+        bigaussian(self.ring, self.rf_station, self.beam, self.sigma_dt, seed=self.seed)
         
-        # energy loss per turn [eV]; assuming isomagnetic lattice
-        self.U0 = C_gamma * self.ring.beta[0]**3 * self.ring.energy[0,0]**4 / self.R_bend
+        # # energy loss per turn [eV]; assuming isomagnetic lattice
+        # self.U0 = C_gamma * self.ring.beta[0,0]**3 * self.ring.energy[0,0]**4 / self.R_bend
 
     def test_initial_beam(self):
         np.testing.assert_almost_equal(
@@ -66,11 +65,12 @@ class TestSynchtrotronRadiation(unittest.TestCase):
             err_msg='Initial beam.dt wrong')
         np.testing.assert_almost_equal(
             [self.beam.dE[0], self.beam.dE[-1]],
-            [337945.02937447827, -193066.62344453152], decimal=10,
+            [132782.5987169414, -479476.31494762405], decimal=10,
+            # [337945.02937447827, -193066.62344453152], decimal=10,
             err_msg='Initial beam.dE wrong')
 
     def test_affect_only_dE(self):
-        # incoherent synchrotron radiation, do displacement of beam
+        # incoherent synchrotron radiation, no displacement of beam
         iSR = SynchrotronRadiation(self.ring, self.rf_station, self.beam, self.R_bend,
                                    seed=self.seed, n_kicks=1, shift_beam=False,
                                    python=True, quantum_excitation=False)
@@ -78,15 +78,44 @@ class TestSynchtrotronRadiation(unittest.TestCase):
         np.testing.assert_almost_equal(
             self.beam.dt[0], 1.0054066581358374e-09, decimal=10,
             err_msg='SR affected beam.dt')
-
-    # def test_synchrotron_radiation_python(self):
-    #     # incoherent synchrotron radiation
-    #     iSR = SynchrotronRadiation(self.ring, self.rf_station, self.beam, self.R_bend,
-    #                                n_kicks=2,
-    #                                python=False, quantum_excitation=False,
-    #                                seed=self.seed)
         
+
+    def test_synchrotron_radiation_python_vs_C(self):
+        iSR = SynchrotronRadiation(self.ring, self.rf_station, self.beam, self.R_bend,
+                                    n_kicks=1, shift_beam=False,
+                                    python=True, quantum_excitation=False, seed=self.seed)
+        iSR.track()  # Python implementation
+
+        beam_C = Beam(self.ring, self.n_macroparticles, self.intensity)
+        bigaussian(self.ring, self.rf_station, beam_C, self.sigma_dt, seed=self.seed)
+        
+        iSR = SynchrotronRadiation(self.ring, self.rf_station, beam_C, self.R_bend,
+                                    n_kicks=1, shift_beam=False,
+                                    python=False, quantum_excitation=False, seed=self.seed)
+        iSR.track()  # C implementation
+
+        np.testing.assert_almost_equal(self.beam.dE, beam_C.dE, decimal=8,
+           err_msg='SR: Python and C implementations yield different results for single kick')
     
+
+    def test_synchrotron_radiation_python_vs_C_double_kick(self):
+        iSR = SynchrotronRadiation(self.ring, self.rf_station, self.beam, self.R_bend,
+                                    n_kicks=2, shift_beam=False,
+                                    python=True, quantum_excitation=False, seed=self.seed)
+        iSR.track()  # Python implementation
+
+        beam_C = Beam(self.ring, self.n_macroparticles, self.intensity)
+        bigaussian(self.ring, self.rf_station, beam_C, self.sigma_dt, seed=self.seed)
+        
+        iSR = SynchrotronRadiation(self.ring, self.rf_station, beam_C, self.R_bend,
+                                    n_kicks=2, shift_beam=False,
+                                    python=False, quantum_excitation=False, seed=self.seed)
+        iSR.track()  # C implementation
+        
+        np.testing.assert_almost_equal(self.beam.dE, beam_C.dE, decimal=8,
+            err_msg='SR: Python and C implementations yield different results for two kicks')
+            
+        
 if __name__ == '__main__':
 
     unittest.main()
