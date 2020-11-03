@@ -839,13 +839,9 @@ def bigaussian(Ring, RFStation, Beam, sigma_dt, sigma_dE = None, seed = None,
     beta = RFStation.beta[counter]
     omega_rf = RFStation.omega_rf[0,counter] 
     phi_s = RFStation.phi_s[counter]
-    phi_rf = RFStation.phi_rf[0,counter]
+    # phi_rf = RFStation.phi_rf[0,counter]
     eta0 = RFStation.eta_0[counter]
-    
-    # RF wave is shifted by Pi below transition
-    if eta0<0:
-        phi_rf -= np.pi
-    
+        
     # Calculate sigma_dE from sigma_dt using single-harmonic Hamiltonian
     if sigma_dE == None:
         voltage = RFStation.charge* \
@@ -855,7 +851,7 @@ def bigaussian(Ring, RFStation, Beam, sigma_dt, sigma_dE = None, seed = None,
         phi_b = omega_rf*sigma_dt + phi_s
         sigma_dE = np.sqrt( voltage * energy * beta**2  
             * (np.cos(phi_b) - np.cos(phi_s) + (phi_b - phi_s) * np.sin(phi_s)) 
-            / (np.pi * harmonic * np.fabs(eta0)) )
+            / (np.pi * harmonic * eta0) )
                 
     Beam.sigma_dt = sigma_dt
     Beam.sigma_dE = sigma_dE
@@ -863,8 +859,9 @@ def bigaussian(Ring, RFStation, Beam, sigma_dt, sigma_dE = None, seed = None,
     # Generate coordinates
     np.random.seed(seed)
     
-    Beam.dt = sigma_dt*np.random.randn(Beam.n_macroparticles).astype(dtype=bm.precision.real_t, order='C', copy=False) + \
-        (phi_s - phi_rf)/omega_rf
+    Beam.dt = sigma_dt * np.random.randn(Beam.n_macroparticles).astype(dtype=bm.precision.real_t, 
+                                                                       order='C', copy=False)\
+            + phi_s/omega_rf
     Beam.dE = sigma_dE * \
         np.random.randn(Beam.n_macroparticles).astype(
             dtype=bm.precision.real_t, order='C')
@@ -878,7 +875,7 @@ def bigaussian(Ring, RFStation, Beam, sigma_dt, sigma_dE = None, seed = None,
         while itemindex.size != 0:
 
             Beam.dt[itemindex] = sigma_dt*np.random.randn(itemindex.size).astype(dtype=bm.precision.real_t, order='C', copy=False) \
-                + (phi_s - phi_rf)/omega_rf
+                + phi_s / omega_rf
 
             Beam.dE[itemindex] = sigma_dE * \
                 np.random.randn(itemindex.size).astype(

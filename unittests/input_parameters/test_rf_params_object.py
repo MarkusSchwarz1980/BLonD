@@ -39,7 +39,7 @@ class testRFParamClass(unittest.TestCase):
 
         N_turn = 200
         N_b = 1e9 #  Intensity
-        N_p = int(2e6) #  Macro-particles
+        N_p = int(2e3) #  Macro-particles
 
         # Machine parameters
         # --------------------
@@ -219,9 +219,17 @@ class testRFParamClass(unittest.TestCase):
     def test_rf_parameters_calculate_phi_s(self):
 
         self.assertEqual(calculate_phi_s(self.rf_params, Particle=Proton())[0], numpy.pi,
-                         msg="Wrong phi_s for Proton")
+                         msg="Wrong phi_s for Proton above transition")
         self.assertEqual(calculate_phi_s(self.rf_params, Particle=Electron())[0], 0.0,
-                         msg="Wrong phi_s for Electron")
+                         msg="Wrong phi_s for Electron above transition")
+
+        # test below transition; swap sign of eta_0
+        self.rf_params.eta_0 *= -1
+
+        self.assertEqual(calculate_phi_s(self.rf_params, Particle=Proton())[0], 0.0,
+                         msg="Wrong phi_s for Proton below transition")
+        self.assertEqual(calculate_phi_s(self.rf_params, Particle=Electron())[0], numpy.pi,
+                         msg="Wrong phi_s for Electron below transition")
 
     # Tests of empty RF station
     def test_rf_parameters_is_empty_station(self):

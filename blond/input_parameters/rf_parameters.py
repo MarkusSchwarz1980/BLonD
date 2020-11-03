@@ -458,16 +458,24 @@ def calculate_phi_s(RFStation, Particle=Proton(),
 
         phi_s = np.arcsin(acceleration_ratio)
 
+        # Project phi_s in correct range above and below transition
+        index = np.sign(Particle.charge) * eta0 > 0
+        phi_s[index] = (np.pi - phi_s[index]) % (2*np.pi)
+        index = np.sign(Particle.charge) * eta0 < 0
+        phi_s[index] = phi_s[index] % (2*np.pi)
+
+        phi_s -= RFStation.phi_rf[0]
+        
         # Identify where eta swaps sign
-        eta0_middle_points = (eta0[1:] + eta0[:-1])/2
-        eta0_middle_points = np.append(eta0_middle_points, eta0[-1])
-        index = np.where(eta0_middle_points > 0)[0]
-        index_below = np.where(eta0_middle_points < 0)[0]
+        # eta0_middle_points = (eta0[1:] + eta0[:-1])/2
+        # eta0_middle_points = np.append(eta0_middle_points, eta0[-1])
+        # index = np.where(eta0_middle_points > 0)[0]
+        # index_below = np.where(eta0_middle_points < 0)[0]
 
         # Project phi_s in correct range
-        phi_s[index] = (np.heaviside(np.sign(Particle.charge),0) * np.pi - phi_s[index]) % (2*np.pi)
-        phi_s[index_below] = (np.heaviside(np.sign(Particle.charge),0) * np.pi + phi_s[index_below])\
-            % (2*np.pi)
+        # phi_s[index] = (np.heaviside(np.sign(Particle.charge),0) * np.pi - phi_s[index]) % (2*np.pi)
+        # phi_s[index_below] = (np.heaviside(np.sign(Particle.charge),0) * np.pi + phi_s[index_below])\
+        #     % (2*np.pi)
         # phi_s[index] = (np.pi - phi_s[index]) % (2*np.pi)
         # phi_s[index_below] = (np.pi + phi_s[index_below]) % (2*np.pi)
 
