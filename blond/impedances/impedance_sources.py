@@ -366,10 +366,14 @@ class Resonators(_ImpedanceObject):
         self.impedance = np.zeros(len(self.frequency_array), dtype=bm.precision.complex_t, order='C')
 
         for i in range(0, self.n_resonators):
+            # R * omega / (omega + 1j*Q * (omega**2/omega_r - omega_r) )
+            self.impedance += self.R_S[i] * self.frequency_array \
+                / (self.frequency_array + 1j * self.Q[i] 
+                   * (self.frequency_array**2 / self.frequency_R[i] - self.frequency_R[i]))
 
-            self.impedance[1:] += self.R_S[i] / (1 + 1j * self.Q[i]
-                                                 * (self.frequency_array[1:] / self.frequency_R[i] -
-                                                  self.frequency_R[i] / self.frequency_array[1:]))
+            # self.impedance[1:] += self.R_S[i] / (1 + 1j * self.Q[i]
+            #                                      * (self.frequency_array[1:] / self.frequency_R[i] -
+            #                                       self.frequency_R[i] / self.frequency_array[1:]))
 
     def _imped_calc_cpp(self, frequency_array):
         r"""
