@@ -359,8 +359,6 @@ print(f"Data points for uniform frequency object:\t\t {len(uniform_frequency_obj
 print(f"Data points for nonuniform frequency object:\t {len(nonuniform_frequency_object.total_impedance)}")
 
 
-#%%
-
 plt.figure('profile', clear=True)
 plt.grid()
 plt.xlabel('time / ns')
@@ -373,34 +371,34 @@ for bunch in range(n_bunches):
 plt.legend(handles=[tmp, tmp2])
 plt.tight_layout()
 
-# plt.figure('impedance', clear=True)
-# plt.grid()
-# plt.plot(uniform_frequency_object.freq / 1e6, 
-#          uniform_frequency_object.total_impedance.real * uniform_profile.bin_size / 1e6, '.')
-# plt.plot(freq / 1e6, Z2.real / 1e6)
+plt.figure('impedance', clear=True)
+plt.grid()
+plt.plot(uniform_frequency_object.freq / 1e6, 
+          uniform_frequency_object.total_impedance.real * uniform_profile.bin_size / 1e6, '.')
+plt.plot(freq / 1e6, Z2.real / 1e6)
 
-# plt.figure('integrand', clear=True)
-# plt.grid()
-# plt.plot(uniform_frequency_object.freq / 1e6,
-#          (uniform_frequency_object.total_impedance*uniform_profile.beam_spectrum).real
-#          * uniform_profile.bin_size / n_macroparticles)
-# plt.plot(freq / 1e6, Y2.real)
+plt.figure('integrand', clear=True)
+plt.grid()
+plt.plot(uniform_frequency_object.freq / 1e6,
+          (uniform_frequency_object.total_impedance*uniform_profile.beam_spectrum).real
+          * uniform_profile.bin_size / n_macroparticles)
+plt.plot(freq / 1e6, Y2.real)
          
 
-# plt.figure('voltage', clear=True)
-# plt.grid()
-# plt.xlabel('time / ns')
-# plt.ylabel('induced voltage / MV')
-# tmp, = plt.plot(induced_voltage.time_array*1e9, induced_voltage.induced_voltage / 1e6, '.',
-#                 label='uniform')
-# for bunch in range(n_bunches):
-#     indexes = (time>nonuniform_profile.cut_left_array[bunch]) * (time<nonuniform_profile.cut_right_array[bunch])
+plt.figure('voltage', clear=True)
+plt.grid()
+plt.xlabel('time / ns')
+plt.ylabel('induced voltage / MV')
+tmp, = plt.plot(induced_voltage.time_array*1e9, induced_voltage.induced_voltage / 1e6, '.',
+                label='uniform')
+for bunch in range(n_bunches):
+    indexes = (time>nonuniform_profile.cut_left_array[bunch]) * (time<nonuniform_profile.cut_right_array[bunch])
 
-#     tmp2, = plt.plot(time[indexes]*1e9, Vind_nonuni2[indexes] / 1e6, 'C1-', label='non-uniform')
-#     tmp3, = plt.plot(time[indexes]*1e9, Vind_anal[indexes] / 1e6, 'C2--', label='analytic')
-# plt.legend(handles=[tmp, tmp2, tmp3])
-# plt.tight_layout()
-# # plt.plot(time*1e9, Vind_nonuni / 1e6)
+    tmp2, = plt.plot(time[indexes]*1e9, Vind_nonuni2[indexes] / 1e6, 'C1-', label='non-uniform')
+    tmp3, = plt.plot(time[indexes]*1e9, Vind_anal[indexes] / 1e6, 'C2--', label='analytic')
+plt.legend(handles=[tmp, tmp2, tmp3])
+plt.tight_layout()
+# plt.plot(time*1e9, Vind_nonuni / 1e6)
 
 
 # plt.figure('profile', clear=True)
