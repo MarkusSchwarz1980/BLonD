@@ -277,12 +277,15 @@ Q = np.array([0.5, 4]) * np.pi*f_r * t_rf  # short and long range wake field
 impedance_model = [Resonators(R_s, f_r, Q, method='python')]
 
 # Induced voltage calculated by the 'frequency' method
-frequency_step = 4*ring.f_rev[0]
-SPS_freq = InducedVoltageFreq(beam, uniform_profile,
-                              impedance_model, frequency_step)
+# frequency_step = 4*ring.f_rev[0]
+frequency_step = 1e6
+uniform_frequency_object = InducedVoltageFreq(beam, uniform_profile,
+                                              impedance_model, frequency_step)
+# using automatic frequency resolution gives wrong result
+# uniform_frequency_object = InducedVoltageFreq(beam, uniform_profile, mpedance_model)
 
 
-induced_voltage = TotalInducedVoltage(beam, uniform_profile, [SPS_freq])
+induced_voltage = TotalInducedVoltage(beam, uniform_profile, [uniform_frequency_object])
 induced_voltage.induced_voltage_sum()
 
 # figf = plt.figure('freq domain', clear=True)
@@ -324,47 +327,77 @@ for bunch in range(n_bunches):
 def _compute_impedance(f, InducedVoltageFreqObject):
     InducedVoltageFreqObject.sum_impedances(f)
     return InducedVoltageFreqObject.total_impedance.real
-    
 
-
-omega = 2*np.pi * SPS_freq.freq
+omega = 2*np.pi * uniform_frequency_object.freq
 # omega *= 2*np.pi
 Lambda = FourierTransform(omega, time, profile / np.trapz(profile, time))
-Z = SPS_freq.total_impedance * SPS_freq.profile.bin_size
+Z = uniform_frequency_object.total_impedance * uniform_frequency_object.profile.bin_size
 # Z *= SPS_freq.profile.bin_size
 Y = Z*Lambda
 Vind_nonuni = -2*intensity_pb * e * FourierTransform(-time, omega, Y) / np.pi
 
-_tmp = SPS_freq.total_impedance
-freq, tmp = sample_function(lambda f: _compute_impedance(f, SPS_freq), 
-                          np.linspace(0,5e9,1000), tol=0.01)
-SPS_freq.sum_impedances(freq)
-Z2 = SPS_freq.total_impedance * SPS_freq.profile.bin_size
-# Z2 *= SPS_freq.profile.bin_size
-SPS_freq.total_impedance = _tmp
+nonuniform_frequency_object = InducedVoltageFreq(beam, uniform_profile, impedance_model)
+freq, tmp = sample_function(lambda f: _compute_impedance(f, nonuniform_frequency_object), 
+                            np.linspace(0,5e9,1000), tol=0.01)
+nonuniform_frequency_object.sum_impedances(freq)
+Z2 = nonuniform_frequency_object.total_impedance * nonuniform_frequency_object.profile.bin_size
+# _tmp = SPS_freq.total_impedance
+# freq, tmp = sample_function(lambda f: _compute_impedance(f, SPS_freq), 
+#                           np.linspace(0,5e9,1000), tol=0.01)
+# SPS_freq.sum_impedances(freq)
+# Z2 = SPS_freq.total_impedance * SPS_freq.profile.bin_size
+## Z2 *= SPS_freq.profile.bin_size
+# SPS_freq.total_impedance = _tmp
 
 Lambda2 = FourierTransform(2*np.pi*freq, time, profile / np.trapz(profile, time))
 Y2 = Z2 * Lambda2
-Vind_nonuni2 = -2*intensity_pb * e * FourierTransform(-time, 2*np.pi*freq, Y2) / np.pi
+Vind_nonuni2 = -2*intensity_pb * e * FourierTransform(-time, 2*np.pi*freq, Y2).real / np.pi
+
+print(f"Data points for uniform frequency object:\t\t {len(uniform_frequency_object.total_impedance)}")
+print(f"Data points for nonuniform frequency object:\t {len(nonuniform_frequency_object.total_impedance)}")
 
 
 #%%
 
 plt.figure('profile', clear=True)
 plt.grid()
-plt.plot(uniform_profile.bin_centers*1e9, uniform_profile.n_macroparticles, '.')
+plt.xlabel('time / ns')
+plt.ylabel('macro-particles')
+tmp, = plt.plot(uniform_profile.bin_centers*1e9, uniform_profile.n_macroparticles, '.',
+                label='Profile, uniform')
 for bunch in range(n_bunches):
     indexes = (time>nonuniform_profile.cut_left_array[bunch]) * (time<nonuniform_profile.cut_right_array[bunch])
-    plt.plot(time[indexes]*1e9, profile[indexes], 'C1-')
+    tmp2, = plt.plot(time[indexes]*1e9, profile[indexes], 'C1-', label='SparseSlices')
+plt.legend(handles=[tmp, tmp2])
+plt.tight_layout()
+
+plt.figure('impedance', clear=True)
+plt.grid()
+plt.plot(uniform_frequency_object.freq / 1e6, 
+         uniform_frequency_object.total_impedance.real * uniform_profile.bin_size / 1e6, '.')
+plt.plot(freq / 1e6, Z2.real / 1e6)
+
+plt.figure('integrand', clear=True)
+plt.grid()
+plt.plot(uniform_frequency_object.freq / 1e6,
+         (uniform_frequency_object.total_impedance*uniform_profile.beam_spectrum).real
+         * uniform_profile.bin_size / n_macroparticles)
+plt.plot(freq / 1e6, Y2.real)
+         
 
 plt.figure('voltage', clear=True)
 plt.grid()
-plt.plot(induced_voltage.time_array*1e9, induced_voltage.induced_voltage / 1e6, '.')
+plt.xlabel('time / ns')
+plt.ylabel('induced voltage / MV')
+tmp, = plt.plot(induced_voltage.time_array*1e9, induced_voltage.induced_voltage / 1e6, '.',
+                label='uniform')
 for bunch in range(n_bunches):
     indexes = (time>nonuniform_profile.cut_left_array[bunch]) * (time<nonuniform_profile.cut_right_array[bunch])
 
-    plt.plot(time[indexes]*1e9, Vind_nonuni2[indexes] / 1e6, 'C1-')
-    plt.plot(time[indexes]*1e9, Vind_anal[indexes] / 1e6, 'C2--')
+    tmp2, = plt.plot(time[indexes]*1e9, Vind_nonuni2[indexes] / 1e6, 'C1-', label='non-uniform')
+    tmp3, = plt.plot(time[indexes]*1e9, Vind_anal[indexes] / 1e6, 'C2--', label='analytic')
+plt.legend(handles=[tmp, tmp2, tmp3])
+plt.tight_layout()
 # plt.plot(time*1e9, Vind_nonuni / 1e6)
 
 
