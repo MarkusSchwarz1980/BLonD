@@ -124,13 +124,13 @@ slice_beam.track()
 print( 'Time for optimized C++ track ', time.time() - t0 )
 plt.figure()
 for i in range(int(np.sum(filling_pattern))):
-    plt.plot(slice_beam.slices_array[i].bin_centers,
-             slice_beam.slices_array[i].n_macroparticles)
+    plt.plot(slice_beam.profiles_list[i].bin_centers,
+             slice_beam.profiles_list[i].n_macroparticles)
 plt.savefig(this_directory + '../output_files/EX_14_fig/cpp_track.png')
 
 
 for i in range(int(np.sum(filling_pattern))):
-    slice_beam.slices_array[i].n_macroparticles *= 0
+    slice_beam.profiles_list[i].n_macroparticles *= 0
 
 
 slice_beam = SparseSlices(RF_sct_par, beam, n_slices, filling_pattern,
@@ -141,8 +141,8 @@ slice_beam.track()
 print( 'Time for individual tracks ', time.time() - t0 )
 plt.figure()
 for i in range(int(np.sum(filling_pattern))):
-    plt.plot(slice_beam.slices_array[i].bin_centers,
-             slice_beam.slices_array[i].n_macroparticles)
+    plt.plot(slice_beam.profiles_list[i].bin_centers,
+             slice_beam.profiles_list[i].n_macroparticles)
 plt.savefig(this_directory + '../output_files/EX_14_fig/ind_track.png')
 
 print("Done!")
