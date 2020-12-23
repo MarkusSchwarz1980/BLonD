@@ -264,7 +264,7 @@ n_slices    = n_slices_rf * (bunch_spacing * (n_bunches-1) + 1 \
             + int(np.round((cut_right - t_batch_end)/t_rf)))
 
 uniform_profile = Profile(beam, CutOptions = CutOptions(cut_left=cut_left,
-                                                cut_right=cut_right, n_slices=n_slices))
+                                            cut_right=cut_right, n_slices=n_slices))
 uniform_profile.track()
 
 
@@ -307,8 +307,10 @@ filling_pattern[::bunch_spacing] = 1
 
 ### sparse beam
 nonuniform_profile = SparseSlices(rf_station, beam, n_slices_rf, filling_pattern,
-                                  tracker='onebyone')
-nonuniform_profile.track()
+                                    tracker='C', direct_slicing=True)
+                                   # tracker='numpy')
+                                   
+# nonuniform_profile.track()
 
 time = nonuniform_profile.bin_centers_array.flatten()
 profile = nonuniform_profile.n_macroparticles_array.flatten()
@@ -371,34 +373,34 @@ for bunch in range(n_bunches):
 plt.legend(handles=[tmp, tmp2])
 plt.tight_layout()
 
-plt.figure('impedance', clear=True)
-plt.grid()
-plt.plot(uniform_frequency_object.freq / 1e6, 
-         uniform_frequency_object.total_impedance.real * uniform_profile.bin_size / 1e6, '.')
-plt.plot(freq / 1e6, Z2.real / 1e6)
+# plt.figure('impedance', clear=True)
+# plt.grid()
+# plt.plot(uniform_frequency_object.freq / 1e6, 
+#          uniform_frequency_object.total_impedance.real * uniform_profile.bin_size / 1e6, '.')
+# plt.plot(freq / 1e6, Z2.real / 1e6)
 
-plt.figure('integrand', clear=True)
-plt.grid()
-plt.plot(uniform_frequency_object.freq / 1e6,
-         (uniform_frequency_object.total_impedance*uniform_profile.beam_spectrum).real
-         * uniform_profile.bin_size / n_macroparticles)
-plt.plot(freq / 1e6, Y2.real)
+# plt.figure('integrand', clear=True)
+# plt.grid()
+# plt.plot(uniform_frequency_object.freq / 1e6,
+#          (uniform_frequency_object.total_impedance*uniform_profile.beam_spectrum).real
+#          * uniform_profile.bin_size / n_macroparticles)
+# plt.plot(freq / 1e6, Y2.real)
          
 
-plt.figure('voltage', clear=True)
-plt.grid()
-plt.xlabel('time / ns')
-plt.ylabel('induced voltage / MV')
-tmp, = plt.plot(induced_voltage.time_array*1e9, induced_voltage.induced_voltage / 1e6, '.',
-                label='uniform')
-for bunch in range(n_bunches):
-    indexes = (time>nonuniform_profile.cut_left_array[bunch]) * (time<nonuniform_profile.cut_right_array[bunch])
+# plt.figure('voltage', clear=True)
+# plt.grid()
+# plt.xlabel('time / ns')
+# plt.ylabel('induced voltage / MV')
+# tmp, = plt.plot(induced_voltage.time_array*1e9, induced_voltage.induced_voltage / 1e6, '.',
+#                 label='uniform')
+# for bunch in range(n_bunches):
+#     indexes = (time>nonuniform_profile.cut_left_array[bunch]) * (time<nonuniform_profile.cut_right_array[bunch])
 
-    tmp2, = plt.plot(time[indexes]*1e9, Vind_nonuni2[indexes] / 1e6, 'C1-', label='non-uniform')
-    tmp3, = plt.plot(time[indexes]*1e9, Vind_anal[indexes] / 1e6, 'C2--', label='analytic')
-plt.legend(handles=[tmp, tmp2, tmp3])
-plt.tight_layout()
-# plt.plot(time*1e9, Vind_nonuni / 1e6)
+#     tmp2, = plt.plot(time[indexes]*1e9, Vind_nonuni2[indexes] / 1e6, 'C1-', label='non-uniform')
+#     tmp3, = plt.plot(time[indexes]*1e9, Vind_anal[indexes] / 1e6, 'C2--', label='analytic')
+# plt.legend(handles=[tmp, tmp2, tmp3])
+# plt.tight_layout()
+# # plt.plot(time*1e9, Vind_nonuni / 1e6)
 
 
 # plt.figure('profile', clear=True)
