@@ -811,3 +811,137 @@ class InducedVoltageResonator(_InducedVoltage):
         Heaviside function, which returns 1 if x>1, 0 if x<0, and 1/2 if x=0
         """
         return 0.5*(np.sign(x) + 1.)
+
+class InducedVoltageSparse(_InducedVoltage):
+
+    def __init__(self, Beam, SparseSlices, frequency_array,
+                 impedance_array):
+        
+        self.sparce_profiles = SparseSlices
+        self.bin_centers = (self.sparce_profiles.bin_centers_array.flatten()).astype(
+            dtype=bm.precision.real_t, order='C', copy=False)
+
+        self.frequency_array = frequency_array.astype(
+            dtype=bm.precision.real_t, order='C', copy=False)
+        self.impedance = impedance_array.astype(
+            dtype=bm.precision.complex_t, order='C', copy=False)
+        
+        self.n_slices = self.sparce_profiles.n_slices_bucket * self.sparce_profiles.n_filled_buckets
+        self.wake_matrix = np.zeros(
+            (self.n_slices,self.n_slices-1), dtype=bm.precision.complex_t, order='C')
+        
+        # normalization factor for bunch profile
+        # self.norm_factor = 1 / (Beam.n_macroparticles * (self.bin_centers[1]-self.bin_centers[0]))
+        # self.norm_factor *= -2*Beam.intensity * e / np.pi
+        # self.norm_factor = -2* e * Beam.ratio / (self.bin_centers[1]-self.bin_centers[0]) / np.pi
+        self.norm_factor = -2* e * Beam.ratio / (self.bin_centers[1]-self.bin_centers[0])
+        
+        self._compute_wake_matrix2()
+        
+    def _compute_wake_matrix(self):
+        """ correct, but really slow"""
+        omegas = 2*np.pi * self.frequency_array
+        for j, tj in enumerate(self.bin_centers):
+
+            for n in range(self.n_slices-2):
+
+                tn = self.bin_centers[n]
+                tnp1 = self.bin_centers[n+1]
+
+                # sum over frequency; m
+                tmp = 0
+                for m in range(len(self.frequency_array)-2):
+                # for m in range(20):
+                    omegam = omegas[m]
+                    omegamp1 = omegas[m+1]
+                    
+                    tmp += \
+                        (self.impedance[m+1] / omegamp1**2 \
+                         * (np.exp(-1j*omegamp1*tnp1) - np.exp(-1j*omegamp1*tn)) \
+                         - self.impedance[m] / omegam**2 \
+                         * (np.exp(-1j*omegam*tnp1) - np.exp(-1j*omegam*tn)) ) \
+                        / (omegamp1 - omegam) \
+                        * (np.exp(1j*omegamp1*tj) - np.exp(1j*omegam*tj))
+                
+                # include difference for slope of bunch profile
+                self.wake_matrix[j, n] = tmp / (tnp1 - tn)
+            
+            self.wake_matrix[j] /= 2*np.pi * tj**2
+        
+        self.wake_matrix *= self.norm_factor
+    
+    def _compute_wake_matrix2(self):
+        """ correct, really fast, but less explicit"""
+        # # dt_matrix = np.zeros((self.n_slices, self.n_slices))
+        # # for it, t in enumerate(self.bin_centers):
+        # #     dt_matrix[it] = t - self.bin_centers
+        # # phase_matrix = np.zeros((*dt_matrix.shape, len(self.frequency_array)))
+        # # for it, el in enumerate(self.frequency_array):
+        # #     phase_matrix[:,:,it] = el * dt_matrix
+
+        # a, b = np.meshgrid(self.bin_centers, self.bin_centers, sparse=True)
+        # dt_matrix = b - a
+        # a, b = np.meshgrid(dt_matrix, self.frequency_array, sparse=True)
+        # self.phase_matrix = (a * b).T.reshape((*dt_matrix.shape, len(self.frequency_array)))
+
+        # self.phase_matrix = np.exp(-2j*np.pi * self.phase_matrix)
+
+        # print(self.phase_matrix.shape)
+        
+        # self.wake_matrix2 = self.impedance / self.frequency_array**2 * np.diff(self.phase_matrix, axis=1)
+        # print(self.wake_matrix2.shape)
+        # self.wake_matrix2 = np.diff(self.wake_matrix2, axis=2) / np.diff(self.frequency_array)
+        # print(self.wake_matrix2.shape, np.diff(self.phase_matrix, axis=2).conj().shape)
+        # np.diff(self.phase_matrix, axis=2).conj() / self.bin_centers**2
+        # # self.wake_matrix2 *= np.diff(self.phase_matrix, axis=2)[:,:-1].conj() / self.bin_centers**2
+        # # self.wake_matrix2 *= np.diff(self.phase_matrix, axis=2) * 0.5/np.pi #/ self.bin_centers**2
+        # # print(self.wake_matrix2.shape)
+        ###
+        
+        # self.phase_matrix = np.exp(-2j*np.pi*np.outer(self.bin_centers, self.frequency_array))
+        # print(self.phase_matrix.shape)
+
+        # self.tmp_2 = (np.diff(self.phase_matrix, axis=1).conj().T / self.bin_centers**2).T
+
+        # self.tmp_1 = self.impedance / self.frequency_array**2 * np.diff(self.phase_matrix, axis=0)
+        # self.tmp_1 = np.diff(self.tmp_1, axis=1) / np.diff(self.frequency_array)
+        # print(self.tmp_1.shape, self.tmp_2.shape)
+
+        # self.tmp = np.zeros((self.n_slices, *self.tmp_1.shape), 
+        #                     dtype=bm.precision.complex_t, order='C')
+        # print(self.tmp.shape)
+        # for it in range(self.n_slices):
+        #     self.tmp[it] = self.tmp_1 * self.tmp_2[it]
+        
+        # self.wake_matrix = self.norm_factor / (2*np.pi) * np.sum(self.tmp, axis=2)
+
+        ###
+        self.omega_array = 2*np.pi * self.frequency_array
+        self.phase_matrix = np.exp(-1j*np.outer(self.bin_centers, self.omega_array))
+        # print(self.phase_matrix.shape)
+
+        self.tmp_2 = (np.diff(self.phase_matrix, axis=1).conj().T / self.bin_centers**2).T
+
+        self.tmp_1 = self.impedance / self.omega_array**2 * np.diff(self.phase_matrix, axis=0)
+        self.tmp_1 = np.diff(self.tmp_1, axis=1) / np.diff(self.omega_array)
+        # print(self.tmp_1.shape, self.tmp_2.shape)
+
+        self.tmp = np.zeros((self.n_slices, *self.tmp_1.shape), 
+                            dtype=bm.precision.complex_t, order='C')
+        # print(self.tmp.shape)
+        for it in range(self.n_slices):
+            self.tmp[it] = self.tmp_1 * self.tmp_2[it]
+        
+        self.wake_matrix = self.norm_factor * np.sum(self.tmp, axis=2) / (2*np.pi)
+        # include difference for slope of bunch profile
+        self.wake_matrix /= np.diff(self.bin_centers)
+
+    
+    def induced_voltage_1turn(self, beam_spectrum_dict={}):
+        delta_lambda = np.diff(self.sparce_profiles.n_macroparticles_array.flatten())
+        
+        induced_voltage = np.matmul(self.wake_matrix, delta_lambda).real
+        
+        self.induced_voltage = induced_voltage.astype(
+            dtype=bm.precision.real_t, order='C', copy=False)
+

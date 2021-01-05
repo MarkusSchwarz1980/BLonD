@@ -339,8 +339,11 @@ Y = Z*Lambda
 Vind_nonuni = -2*intensity_pb * e * FourierTransform(-time, omega, Y) / np.pi
 
 nonuniform_frequency_object = InducedVoltageFreq(beam, uniform_profile, impedance_model)
+# freq, tmp = sample_function(lambda f: _compute_impedance(f, nonuniform_frequency_object), 
+#                             np.linspace(0,5e9,1000), tol=0.01)
 freq, tmp = sample_function(lambda f: _compute_impedance(f, nonuniform_frequency_object), 
-                            np.linspace(0,5e9,1000), tol=0.01)
+                            np.linspace(1,3e9,1000), tol=0.01)
+# freq = np.linspace(1,5e9, 20)
 nonuniform_frequency_object.sum_impedances(freq)
 Z2 = nonuniform_frequency_object.total_impedance * nonuniform_frequency_object.profile.bin_size
 # _tmp = SPS_freq.total_impedance
@@ -396,8 +399,6 @@ for bunch in range(n_bunches):
 
     tmp2, = plt.plot(time[indexes]*1e9, Vind_nonuni2[indexes] / 1e6, 'C1-', label='non-uniform')
     tmp3, = plt.plot(time[indexes]*1e9, Vind_anal[indexes] / 1e6, 'C2--', label='analytic')
-plt.legend(handles=[tmp, tmp2, tmp3])
-plt.tight_layout()
 # plt.plot(time*1e9, Vind_nonuni / 1e6)
 
 
@@ -434,3 +435,30 @@ plt.tight_layout()
 # plt.plot(omega/2/np.pi/1e6, np.abs(Y))
 # plt.plot(freq/1e6, np.abs(Y2), '.')
 
+#%%
+from blond.impedances.impedance import InducedVoltageSparse
+
+Vind_sparse = InducedVoltageSparse(beam, nonuniform_profile, freq, Z2)
+# Vind_sparse._compute_wake_matrix2()
+Vind_sparse.induced_voltage_1turn()
+
+plt.figure('voltage', clear=False)
+for bunch in range(n_bunches):
+    indexes = (time>nonuniform_profile.cut_left_array[bunch]) * (time<nonuniform_profile.cut_right_array[bunch])
+
+    tmp4, = plt.plot(time[indexes]*1e9, Vind_sparse.induced_voltage[indexes] / 1e6, 'C3--', 
+                      label='non-uniform object')
+plt.legend(handles=[tmp, tmp2, tmp3, tmp4])
+plt.tight_layout()
+
+
+# from blond.impedances.impedance import InducedVoltageSparse
+# Vind_sparse2 = InducedVoltageSparse(beam, nonuniform_profile, freq, Z2)
+# Vind_sparse2._compute_wake_matrix2()
+# Vind_sparse2.induced_voltage_1turn()
+
+
+# plt.figure('tmp', clear=True)
+# plt.grid()
+# plt.plot(Vind_sparse.bin_centers * 1e9, Vind_sparse.induced_voltage / 1e6)
+# plt.plot(Vind_sparse2.bin_centers * 1e9, Vind_sparse2.induced_voltage / 1e6, '--')
