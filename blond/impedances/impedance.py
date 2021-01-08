@@ -815,12 +815,16 @@ class InducedVoltageResonator(_InducedVoltage):
 
 class InducedVoltageSparse(_InducedVoltage):
 
-    def __init__(self, Beam, profile_object, frequency_array,
-                 impedance_array):
+    def __init__(self, Beam, profile_object, frequency_array, impedance_source_list,
+                 adaptive_frequency_sampling=False):
+        
+        self.profile_object = profile_object
         
         if isinstance(profile_object, SparseSlices):
             self.bin_centers = (profile_object.bin_centers_array.flatten()).astype(
                 dtype=bm.precision.real_t, order='C', copy=False)
+            # self.profile_object.n_macroparticles = (profile_object.n_macroparticles_array.flatten()).astype(
+            #     dtype=bm.precision.real_t, order='C', copy=False)
             self.n_slices = profile_object.n_slices_bucket * profile_object.n_filled_buckets
             self.induced_voltage_1turn = self._induced_voltage_1turn_sparse
         elif isinstance(profile_object, Profile):
@@ -829,110 +833,50 @@ class InducedVoltageSparse(_InducedVoltage):
             self.n_slices = profile_object.n_slices
             self.induced_voltage_1turn = self._induced_voltage_1turn_profile
         
-        self.profile_object = profile_object
-
-        # self.sparce_profiles = SparseSlices
-        # self.bin_centers = (self.sparce_profiles.bin_centers_array.flatten()).astype(
-        #     dtype=bm.precision.real_t, order='C', copy=False)
-
-        self.frequency_array = frequency_array.astype(
-            dtype=bm.precision.real_t, order='C', copy=False)
-        self.impedance = impedance_array.astype(
-            dtype=bm.precision.complex_t, order='C', copy=False)
+        self.beam = Beam
         
-        # self.n_slices = self.sparce_profiles.n_slices_bucket * self.sparce_profiles.n_filled_buckets
+        self.impedance_source_list = impedance_source_list
+        
+        if adaptive_frequency_sampling:
+            if isinstance(profile_object, SparseSlices):
+                init_profile = self.profile_object.n_macroparticles_array.flatten()
+            elif isinstance(profile_object, Profile):
+                init_profile = self.profile_object.n_macroparticles
+
+            self.frequency_array, _ = sample_function(
+                lambda f: (self._sum_impedance(f) * \
+                           FourierTransform(2*np.pi*f, self.bin_centers, init_profile)).real,
+                frequency_array, tol=0.001)
+            
+            # sample real part of impedance
+            # self.frequency_array, _ = sample_function(lambda f: self._sum_impedance(f).real, 
+            #                                           frequency_array, tol=0.01)
+            
+            self.impedance = self._sum_impedance(self.frequency_array)
+            
+        else:
+            self.frequency_array = frequency_array.astype(
+                dtype=bm.precision.real_t, order='C', copy=False)
+            
+            self.impedance = self._sum_impedance(self.frequency_array).astype(
+            dtype=bm.precision.complex_t, order='C', copy=False)
+            
         self.wake_matrix = np.zeros(
             (self.n_slices,self.n_slices-1), dtype=bm.precision.complex_t, order='C')
         
         # normalization factor for bunch profile
-        # self.norm_factor = 1 / (Beam.n_macroparticles * (self.bin_centers[1]-self.bin_centers[0]))
-        # self.norm_factor *= -2*Beam.intensity * e / np.pi
-        # self.norm_factor = -2* e * Beam.ratio / (self.bin_centers[1]-self.bin_centers[0]) / np.pi
-        self.norm_factor = -2* e * Beam.ratio / (self.bin_centers[1]-self.bin_centers[0])
+        self.norm_factor = -e * self.beam.ratio / (self.bin_centers[1]-self.bin_centers[0]) / np.pi
+        # self.norm_factor = -e * Beam.intensity / np.pi \
+        #     / np.trapz(self.profile_object.n_macroparticles_array.flatten(), self.bin_centers)
         
-        self._compute_wake_matrix2()
-        
-    def _compute_wake_matrix(self):
-        """ correct, but really slow"""
-        omegas = 2*np.pi * self.frequency_array
-        for j, tj in enumerate(self.bin_centers):
-
-            for n in range(self.n_slices-2):
-
-                tn = self.bin_centers[n]
-                tnp1 = self.bin_centers[n+1]
-
-                # sum over frequency; m
-                tmp = 0
-                for m in range(len(self.frequency_array)-2):
-                # for m in range(20):
-                    omegam = omegas[m]
-                    omegamp1 = omegas[m+1]
-                    
-                    tmp += \
-                        (self.impedance[m+1] / omegamp1**2 \
-                         * (np.exp(-1j*omegamp1*tnp1) - np.exp(-1j*omegamp1*tn)) \
-                         - self.impedance[m] / omegam**2 \
-                         * (np.exp(-1j*omegam*tnp1) - np.exp(-1j*omegam*tn)) ) \
-                        / (omegamp1 - omegam) \
-                        * (np.exp(1j*omegamp1*tj) - np.exp(1j*omegam*tj))
-                
-                # include difference for slope of bunch profile
-                self.wake_matrix[j, n] = tmp / (tnp1 - tn)
-            
-            self.wake_matrix[j] /= 2*np.pi * tj**2
-        
-        self.wake_matrix *= self.norm_factor
+        self._compute_wake_matrix()
     
-    def _compute_wake_matrix2(self):
+    def _compute_wake_matrix(self):
         """ correct, really fast, but less explicit"""
-        # # dt_matrix = np.zeros((self.n_slices, self.n_slices))
-        # # for it, t in enumerate(self.bin_centers):
-        # #     dt_matrix[it] = t - self.bin_centers
-        # # phase_matrix = np.zeros((*dt_matrix.shape, len(self.frequency_array)))
-        # # for it, el in enumerate(self.frequency_array):
-        # #     phase_matrix[:,:,it] = el * dt_matrix
 
-        # a, b = np.meshgrid(self.bin_centers, self.bin_centers, sparse=True)
-        # dt_matrix = b - a
-        # a, b = np.meshgrid(dt_matrix, self.frequency_array, sparse=True)
-        # self.phase_matrix = (a * b).T.reshape((*dt_matrix.shape, len(self.frequency_array)))
 
-        # self.phase_matrix = np.exp(-2j*np.pi * self.phase_matrix)
-
-        # print(self.phase_matrix.shape)
-        
-        # self.wake_matrix2 = self.impedance / self.frequency_array**2 * np.diff(self.phase_matrix, axis=1)
-        # print(self.wake_matrix2.shape)
-        # self.wake_matrix2 = np.diff(self.wake_matrix2, axis=2) / np.diff(self.frequency_array)
-        # print(self.wake_matrix2.shape, np.diff(self.phase_matrix, axis=2).conj().shape)
-        # np.diff(self.phase_matrix, axis=2).conj() / self.bin_centers**2
-        # # self.wake_matrix2 *= np.diff(self.phase_matrix, axis=2)[:,:-1].conj() / self.bin_centers**2
-        # # self.wake_matrix2 *= np.diff(self.phase_matrix, axis=2) * 0.5/np.pi #/ self.bin_centers**2
-        # # print(self.wake_matrix2.shape)
-        ###
-        
-        # self.phase_matrix = np.exp(-2j*np.pi*np.outer(self.bin_centers, self.frequency_array))
-        # print(self.phase_matrix.shape)
-
-        # self.tmp_2 = (np.diff(self.phase_matrix, axis=1).conj().T / self.bin_centers**2).T
-
-        # self.tmp_1 = self.impedance / self.frequency_array**2 * np.diff(self.phase_matrix, axis=0)
-        # self.tmp_1 = np.diff(self.tmp_1, axis=1) / np.diff(self.frequency_array)
-        # print(self.tmp_1.shape, self.tmp_2.shape)
-
-        # self.tmp = np.zeros((self.n_slices, *self.tmp_1.shape), 
-        #                     dtype=bm.precision.complex_t, order='C')
-        # print(self.tmp.shape)
-        # for it in range(self.n_slices):
-        #     self.tmp[it] = self.tmp_1 * self.tmp_2[it]
-        
-        # self.wake_matrix = self.norm_factor / (2*np.pi) * np.sum(self.tmp, axis=2)
-
-        ###
         self.omega_array = 2*np.pi * self.frequency_array
         self.phase_matrix = np.exp(-1j*np.outer(self.bin_centers, self.omega_array))
-        # print(self.phase_matrix.shape)
 
         self.tmp_2 = (np.diff(self.phase_matrix, axis=1).conj().T / self.bin_centers**2).T
 
@@ -943,25 +887,16 @@ class InducedVoltageSparse(_InducedVoltage):
         # omega !=0; in the limit omega->0 the sum over frequencies is finite and equals 0 if Z(0)=0
         self.tmp_1[:,self.indexes] = self.impedance[self.indexes] / self.omega_array[self.indexes]**2 \
             * np.diff(self.phase_matrix[:,self.indexes], axis=0)
-        # np.invert(self.indexes, self.indexes)
-
-        # if np.count_nonzero(self.indexes) == 1:
-        #     self.tmp_1b[:,self.indexes] = self.impedance[self.indexes] \
-        #         * (-0.5) * np.diff(self.bin_centers**2).T
-
-        # self.tmp_1 = self.impedance / self.omega_array**2 * np.diff(self.phase_matrix, axis=0)
-
 
         self.tmp_1 = np.diff(self.tmp_1, axis=1) / np.diff(self.omega_array)
-        # print(self.tmp_1.shaspe, self.tmp_2.shape)
 
         self.wake_matrix = np.zeros((self.n_slices, self.n_slices-1), 
                                     dtype=bm.precision.complex_t, order='C')        
         for it in range(self.n_slices):
             self.wake_matrix[it] = np.sum(self.tmp_1 * self.tmp_2[it], axis=1)        
-        self.wake_matrix *= self.norm_factor / (2*np.pi)
+        self.wake_matrix *= self.norm_factor
 
-        # include difference for slope of bunch profile
+        # include difference for slope of bunch profile in matrix so that it does't have to be computed each turn
         self.wake_matrix /= np.diff(self.bin_centers)
 
     
@@ -980,3 +915,196 @@ class InducedVoltageSparse(_InducedVoltage):
         
         self.induced_voltage = induced_voltage.astype(
             dtype=bm.precision.real_t, order='C', copy=False)
+    
+    def _sum_impedance(self, frequency):
+        impedance = np.zeros(frequency.shape, dtype=bm.precision.complex_t, order='C')
+
+        for impedance_source in self.impedance_source_list:
+            impedance_source.imped_calc(frequency)
+            impedance += impedance_source.impedance.astype(
+                dtype=bm.precision.complex_t, order='C', copy=False)
+        
+        return impedance
+    
+    def process(self):
+        self.norm_factor = -e * self.beam.ratio / (self.bin_centers[1]-self.bin_centers[0]) / np.pi
+        self._compute_wake_matrix()
+
+
+def FourierTransform(k, x, y):
+
+    res = np.zeros_like(k, dtype=np.complex)
+    
+    kappa = np.diff(y) / np.diff(x)
+    
+    if type(k) == np.ndarray:
+        indexes = k != 0
+        phase = np.exp(-1j * np.outer(k[indexes],x) )
+    
+        phase_diff = np.diff(phase, axis=1)
+    
+        res[indexes] = np.sum(kappa * phase_diff, axis=1) / k[indexes]**2
+        
+        np.invert(indexes, indexes)
+        # res[indexes] = -0.5 * np.sum( np.diff(x**2) * kappa)
+        res[indexes] = -0.5 * np.sum( (x[:-1] + x[1:]) * np.diff(y) )
+
+    else:  # k is a single number
+        if k == 0.0:
+            res = -0.5 * np.sum( (x[:-1] + x[1:]) * np.diff(y) )
+        else:
+            phase = np.exp(-1j * k * x )
+    
+            phase_diff = np.diff(phase)
+    
+            res = np.sum(kappa * phase_diff) / k**2
+    
+    return res
+
+
+# credit to Pauli Virtanen
+# License: Creative Commons Zero (almost public domain) http://scpyce.org/cc0
+def sample_function(func, points, tol=0.05, min_points=16, max_level=16,
+                    sample_transform=None):
+    """
+    Sample a 1D function to given tolerance by adaptive subdivision.
+
+    The result of sampling is a set of points that, if plotted,
+    produces a smooth curve with also sharp features of the function
+    resolved.
+
+    Parameters
+    ----------
+    func : callable
+        Function func(x) of a single argument. It is assumed to be vectorized.
+    points : array-like, 1D
+        Initial points to sample, sorted in ascending order.
+        These will determine also the bounds of sampling.
+    tol : float, optional
+        Tolerance to sample to. The condition is roughly that the total
+        length of the curve on the (x, y) plane is computed up to this
+        tolerance.
+    min_point : int, optional
+        Minimum number of points to sample.
+    max_level : int, optional
+        Maximum subdivision depth.
+    sample_transform : callable, optional
+        Function w = g(x, y). The x-samples are generated so that w
+        is sampled.
+
+    Returns
+    -------
+    x : ndarray
+        X-coordinates
+    y : ndarray
+        Corresponding values of func(x)
+
+    Notes
+    -----
+    This routine is useful in computing functions that are expensive
+    to compute, and have sharp features --- it makes more sense to
+    adaptively dedicate more sampling points for the sharp features
+    than the smooth parts.
+
+    Examples
+    --------
+    >>> def func(x):
+    ...     '''Function with a sharp peak on a smooth background'''
+    ...     a = 0.001
+    ...     return x + a**2/(a**2 + x**2)
+    ...
+    >>> x, y = sample_function(func, [-1, 1], tol=1e-3)
+
+    >>> import matplotlib.pyplot as plt
+    >>> xx = np.linspace(-1, 1, 12000)
+    >>> plt.plot(xx, func(xx), '-', x, y[0], '.')
+    >>> plt.show()
+
+    """
+    return _sample_function(func, points, values=None, mask=None, depth=0,
+                            tol=tol, min_points=min_points, max_level=max_level,
+                            sample_transform=sample_transform)
+
+
+def _sample_function(func, points, values=None, mask=None, tol=0.05,
+                     depth=0, min_points=16, max_level=16,
+                     sample_transform=None):
+    points = np.asarray(points)
+
+    if values is None:
+        values = np.atleast_2d(func(points))
+
+    if mask is None:
+        mask = Ellipsis
+
+    if depth > max_level:
+        # recursion limit
+        print('Warning: Maximum recursion reached')
+        return points, values
+
+    x_a = points[...,:-1][mask]
+    x_b = points[...,1:][mask]
+
+    x_c = .5*(x_a + x_b)
+    y_c = np.atleast_2d(func(x_c))
+
+    x_2 = np.r_[points, x_c]
+    y_2 = np.r_['-1', values, y_c]
+    j = np.argsort(x_2)
+
+    x_2 = x_2[...,j]
+    y_2 = y_2[...,j]
+
+    # -- Determine the intervals at which refinement is necessary
+
+    if len(x_2) < min_points:
+        mask = np.ones([len(x_2)-1], dtype=bool)
+    else:
+        # represent the data as a path in N dimensions (scaled to unit box)
+        if sample_transform is not None:
+            y_2_val = sample_transform(x_2, y_2)
+        else:
+            y_2_val = y_2
+
+        p = np.r_['0',
+                  x_2[None,:],
+                  y_2_val.real.reshape(-1, y_2_val.shape[-1]),
+                  y_2_val.imag.reshape(-1, y_2_val.shape[-1])
+                  ]
+
+        sz = (p.shape[0]-1)//2
+
+        xscale = x_2.ptp(axis=-1)
+        yscale = abs(y_2_val.ptp(axis=-1)).ravel()
+
+        p[0] /= xscale
+        p[1:sz+1] /= yscale[:,None]
+        p[sz+1:]  /= yscale[:,None]
+
+        # compute the length of each line segment in the path
+        dp = np.diff(p, axis=-1)
+        s = np.sqrt((dp**2).sum(axis=0))
+        s_tot = s.sum()
+
+        # compute the angle between consecutive line segments
+        dp /= s
+        dcos = np.arccos(np.clip((dp[:,1:] * dp[:,:-1]).sum(axis=0), -1, 1))
+
+        # determine where to subdivide: the condition is roughly that
+        # the total length of the path (in the scaled data) is computed
+        # to accuracy `tol`
+        dp_piece = dcos * .5*(s[1:] + s[:-1])
+        mask = (dp_piece > tol * s_tot)
+
+        mask = np.r_[mask, False]
+        mask[1:] |= mask[:-1].copy()
+
+
+    # -- Refine, if necessary
+
+    if mask.any():
+        return _sample_function(func, x_2, y_2, mask, tol=tol, depth=depth+1,
+                                min_points=min_points, max_level=max_level,
+                                sample_transform=sample_transform)
+    else:
+        return x_2, y_2[0]
