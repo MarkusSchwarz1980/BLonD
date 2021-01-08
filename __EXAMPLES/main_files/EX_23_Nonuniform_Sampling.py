@@ -262,7 +262,7 @@ cut_right = t_batch_end + profile_margin
 n_slices    = n_slices_rf * (bunch_spacing * (n_bunches-1) + 1 \
             + int(np.round((t_batch_begin - cut_left)/t_rf)) \
             + int(np.round((cut_right - t_batch_end)/t_rf)))
-
+#%%
 uniform_profile = Profile(beam, CutOptions = CutOptions(cut_left=cut_left,
                                             cut_right=cut_right, n_slices=n_slices))
 uniform_profile.track()
@@ -341,8 +341,10 @@ Vind_nonuni = -2*intensity_pb * e * FourierTransform(-time, omega, Y) / np.pi
 nonuniform_frequency_object = InducedVoltageFreq(beam, uniform_profile, impedance_model)
 # freq, tmp = sample_function(lambda f: _compute_impedance(f, nonuniform_frequency_object), 
 #                             np.linspace(0,5e9,1000), tol=0.01)
+# freq, tmp = sample_function(lambda f: _compute_impedance(f, nonuniform_frequency_object), 
+#                             np.linspace(1,3e9,1000), tol=0.01)
 freq, tmp = sample_function(lambda f: _compute_impedance(f, nonuniform_frequency_object), 
-                            np.linspace(1,3e9,1000), tol=0.01)
+                            np.linspace(0,3e9,1000), tol=0.01)
 # freq = np.linspace(1,5e9, 20)
 nonuniform_frequency_object.sum_impedances(freq)
 Z2 = nonuniform_frequency_object.total_impedance * nonuniform_frequency_object.profile.bin_size
@@ -462,3 +464,9 @@ plt.tight_layout()
 # plt.grid()
 # plt.plot(Vind_sparse.bin_centers * 1e9, Vind_sparse.induced_voltage / 1e6)
 # plt.plot(Vind_sparse2.bin_centers * 1e9, Vind_sparse2.induced_voltage / 1e6, '--')
+
+# Vind_uniform = InducedVoltageSparse(beam, uniform_profile, uniform_frequency_object.freq[1:], 
+#                                     uniform_frequency_object.total_impedance[1:] * uniform_profile.bin_size)
+
+# Vind_uniform.induced_voltage_1turn()
+# plt.plot(uniform_profile.bin_centers*1e9, Vind_uniform.induced_voltage / 1e6, 'C4--')

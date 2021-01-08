@@ -21,7 +21,8 @@ from ctypes import c_uint, c_double, c_void_p
 from scipy.constants import e
 from ..toolbox.next_regular import next_regular
 from ..utils import bmath as bm
-
+from blond.beam.sparse_slices import SparseSlices
+from blond.beam.profile import Profile
 
 class TotalInducedVoltage(object):
     r"""
@@ -814,19 +815,32 @@ class InducedVoltageResonator(_InducedVoltage):
 
 class InducedVoltageSparse(_InducedVoltage):
 
-    def __init__(self, Beam, SparseSlices, frequency_array,
+    def __init__(self, Beam, profile_object, frequency_array,
                  impedance_array):
         
-        self.sparce_profiles = SparseSlices
-        self.bin_centers = (self.sparce_profiles.bin_centers_array.flatten()).astype(
-            dtype=bm.precision.real_t, order='C', copy=False)
+        if isinstance(profile_object, SparseSlices):
+            self.bin_centers = (profile_object.bin_centers_array.flatten()).astype(
+                dtype=bm.precision.real_t, order='C', copy=False)
+            self.n_slices = profile_object.n_slices_bucket * profile_object.n_filled_buckets
+            self.induced_voltage_1turn = self._induced_voltage_1turn_sparse
+        elif isinstance(profile_object, Profile):
+            self.bin_centers = profile_object.bin_centers.astype(
+                dtype=bm.precision.real_t, order='C', copy=False)
+            self.n_slices = profile_object.n_slices
+            self.induced_voltage_1turn = self._induced_voltage_1turn_profile
+        
+        self.profile_object = profile_object
+
+        # self.sparce_profiles = SparseSlices
+        # self.bin_centers = (self.sparce_profiles.bin_centers_array.flatten()).astype(
+        #     dtype=bm.precision.real_t, order='C', copy=False)
 
         self.frequency_array = frequency_array.astype(
             dtype=bm.precision.real_t, order='C', copy=False)
         self.impedance = impedance_array.astype(
             dtype=bm.precision.complex_t, order='C', copy=False)
         
-        self.n_slices = self.sparce_profiles.n_slices_bucket * self.sparce_profiles.n_filled_buckets
+        # self.n_slices = self.sparce_profiles.n_slices_bucket * self.sparce_profiles.n_filled_buckets
         self.wake_matrix = np.zeros(
             (self.n_slices,self.n_slices-1), dtype=bm.precision.complex_t, order='C')
         
@@ -922,26 +936,47 @@ class InducedVoltageSparse(_InducedVoltage):
 
         self.tmp_2 = (np.diff(self.phase_matrix, axis=1).conj().T / self.bin_centers**2).T
 
-        self.tmp_1 = self.impedance / self.omega_array**2 * np.diff(self.phase_matrix, axis=0)
-        self.tmp_1 = np.diff(self.tmp_1, axis=1) / np.diff(self.omega_array)
-        # print(self.tmp_1.shape, self.tmp_2.shape)
 
-        self.tmp = np.zeros((self.n_slices, *self.tmp_1.shape), 
-                            dtype=bm.precision.complex_t, order='C')
-        # print(self.tmp.shape)
+        self.tmp_1 = np.zeros((self.n_slices-1, len(self.frequency_array)),
+                               dtype=bm.precision.complex_t, order='C')
+        self.indexes = self.omega_array != 0
+        # omega !=0; in the limit omega->0 the sum over frequencies is finite and equals 0 if Z(0)=0
+        self.tmp_1[:,self.indexes] = self.impedance[self.indexes] / self.omega_array[self.indexes]**2 \
+            * np.diff(self.phase_matrix[:,self.indexes], axis=0)
+        # np.invert(self.indexes, self.indexes)
+
+        # if np.count_nonzero(self.indexes) == 1:
+        #     self.tmp_1b[:,self.indexes] = self.impedance[self.indexes] \
+        #         * (-0.5) * np.diff(self.bin_centers**2).T
+
+        # self.tmp_1 = self.impedance / self.omega_array**2 * np.diff(self.phase_matrix, axis=0)
+
+
+        self.tmp_1 = np.diff(self.tmp_1, axis=1) / np.diff(self.omega_array)
+        # print(self.tmp_1.shaspe, self.tmp_2.shape)
+
+        self.wake_matrix = np.zeros((self.n_slices, self.n_slices-1), 
+                                    dtype=bm.precision.complex_t, order='C')        
         for it in range(self.n_slices):
-            self.tmp[it] = self.tmp_1 * self.tmp_2[it]
-        
-        self.wake_matrix = self.norm_factor * np.sum(self.tmp, axis=2) / (2*np.pi)
+            self.wake_matrix[it] = np.sum(self.tmp_1 * self.tmp_2[it], axis=1)        
+        self.wake_matrix *= self.norm_factor / (2*np.pi)
+
         # include difference for slope of bunch profile
         self.wake_matrix /= np.diff(self.bin_centers)
 
     
-    def induced_voltage_1turn(self, beam_spectrum_dict={}):
-        delta_lambda = np.diff(self.sparce_profiles.n_macroparticles_array.flatten())
+    def _induced_voltage_1turn_sparse(self, beam_spectrum_dict={}):
+        delta_lambda = np.diff(self.profile_object.n_macroparticles_array.flatten())
         
         induced_voltage = np.matmul(self.wake_matrix, delta_lambda).real
         
         self.induced_voltage = induced_voltage.astype(
             dtype=bm.precision.real_t, order='C', copy=False)
 
+    def _induced_voltage_1turn_profile(self, beam_spectrum_dict={}):
+        delta_lambda = np.diff(self.profile_object.n_macroparticles)
+        
+        induced_voltage = np.matmul(self.wake_matrix, delta_lambda).real
+        
+        self.induced_voltage = induced_voltage.astype(
+            dtype=bm.precision.real_t, order='C', copy=False)
